@@ -27,6 +27,7 @@ dd-trace ships with plugins for 100+ popular Node.js libraries. Every plugin is 
   <Accordion title="HTTP clients">
     | Plugin name | npm package |
     |---|---|
+    | `axios` | `axios` |
     | `fetch` | `fetch` (global) |
     | `http` | Node.js `http` / `https` / `node:http` / `node:https` |
     | `http2` | Node.js `http2` / `node:http2` |
@@ -43,7 +44,7 @@ dd-trace ships with plugins for 100+ popular Node.js libraries. Every plugin is 
     | `oracledb` | `oracledb` |
     | `pg` | `pg` |
     | `prisma` | `@prisma/client` |
-    | `sequelize` | via `knex` / dialect plugins |
+    | `sequelize` | `sequelize` |
     | `tedious` | `tedious` (SQL Server) |
   </Accordion>
 
@@ -139,15 +140,42 @@ dd-trace ships with plugins for 100+ popular Node.js libraries. Every plugin is 
     | Plugin name | module |
     |---|---|
     | `child_process` | `child_process` |
+    | `crypto` | `crypto`, `node:crypto` |
     | `dns` | `dns`, `node:dns` |
     | `fs` | `fs` |
     | `net` | `net`, `node:net` |
+    | `process` | `process` |
+    | `vm` | `vm`, `node:vm` |
+  </Accordion>
+
+  <Accordion title="Middleware & security">
+    | Plugin name | npm package |
+    |---|---|
+    | `body-parser` | `body-parser` |
+    | `cookie` | `cookie` |
+    | `cookie-parser` | `cookie-parser` |
+    | `express-mongo-sanitize` | `express-mongo-sanitize` |
+    | `express-session` | `express-session` |
+    | `ldapjs` | `ldapjs` |
+    | `multer` | `multer` |
+    | `passport-http` | `passport-http` |
+  </Accordion>
+
+  <Accordion title="Templating">
+    | Plugin name | npm package |
+    |---|---|
+    | `handlebars` | `handlebars` |
+    | `pug` | `pug` |
   </Accordion>
 
   <Accordion title="Utilities">
     | Plugin name | npm package |
     |---|---|
     | `generic-pool` | `generic-pool` |
+    | `light-my-request` | `light-my-request` |
+    | `limitd-client` | `limitd-client` |
+    | `lodash` | `lodash` |
+    | `url` | Node.js `url`, `node:url` |
     | `ws` | `ws` |
   </Accordion>
 

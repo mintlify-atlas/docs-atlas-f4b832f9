@@ -521,3 +521,112 @@ TracerProvider: opentelemetry.TracerProvider
 ```
 
 See the [OpenTelemetry Tracing](/api/opentelemetry/tracing) reference.
+
+---
+
+### `aiguard`
+
+Access the AI Guard SDK for evaluating AI conversation safety.
+
+```typescript
+aiguard: aiguard.AIGuard
+```
+
+```javascript
+const tracer = require('dd-trace').init({
+  experimental: { aiguard: { enabled: true } }
+})
+
+const result = await tracer.aiguard.evaluate(messages, { block: false })
+// result.action: 'ALLOW' | 'DENY' | 'ABORT'
+```
+
+<Note>
+  Enable AI Guard by setting `experimental.aiguard.enabled: true` in `TracerOptions` or `DD_AI_GUARD_ENABLED=true`. This feature requires a connection to the AI Guard service via `DD_AI_GUARD_ENDPOINT`.
+</Note>
+
+---
+
+### `openfeature`
+
+OpenFeature-compatible provider for feature flag evaluation, backed by Datadog Remote Configuration.
+
+```typescript
+openfeature: OpenFeatureProvider
+```
+
+<Note>
+  This feature is in beta and requires `experimental.flaggingProvider.enabled: true` or `DD_EXPERIMENTAL_FLAGGING_PROVIDER_ENABLED=true`. Remote Configuration must be properly configured.
+</Note>
+
+---
+
+## Baggage API
+
+The following experimental methods manage W3C Baggage on the current async context. Baggage propagates across service boundaries as key-value pairs attached to the trace context.
+
+<Warning>
+  These methods are experimental and subject to change.
+</Warning>
+
+### `setBaggageItem(key, value, metadata?)`
+
+Sets a baggage item on the current context.
+
+```typescript
+setBaggageItem(key: string, value: string, metadata?: object): Record<string, string>
+```
+
+```javascript
+tracer.setBaggageItem('user.id', '123')
+tracer.setBaggageItem('tenant', 'acme-corp')
+```
+
+---
+
+### `getBaggageItem(key)`
+
+Returns a specific baggage item from the current context.
+
+```typescript
+getBaggageItem(key: string): string | undefined
+```
+
+```javascript
+const userId = tracer.getBaggageItem('user.id')
+```
+
+---
+
+### `getAllBaggageItems()`
+
+Returns all baggage items from the current context as a key-value record.
+
+```typescript
+getAllBaggageItems(): Record<string, string>
+```
+
+```javascript
+const allBaggage = tracer.getAllBaggageItems()
+// { 'user.id': '123', tenant: 'acme-corp' }
+```
+
+---
+
+### `removeBaggageItem(key)`
+
+Removes a specific baggage item from the current context.
+
+```typescript
+removeBaggageItem(key: string): Record<string, string>
+```
+
+---
+
+### `removeAllBaggageItems()`
+
+Removes all baggage items from the current context.
+
+```typescript
+removeAllBaggageItems(): Record<string, string>
+```

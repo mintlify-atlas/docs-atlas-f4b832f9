@@ -346,6 +346,51 @@ const tracer = require('dd-trace').init({
   **Env:** `DD_TRACE_CLOUD_REQUEST_PAYLOAD_TAGGING`, `DD_TRACE_CLOUD_RESPONSE_PAYLOAD_TAGGING`
 </ParamField>
 
+## Dynamic Instrumentation
+
+<ParamField body="dynamicInstrumentation" type="object">
+  Configuration for Dynamic Instrumentation (Live Debugging). Allows adding log probes and metric probes to running applications without redeployment.
+
+  ```javascript
+  dynamicInstrumentation: {
+    enabled: true,
+    captureTimeoutMs: 15,       // timeout for variable capture (default: 15ms)
+    uploadIntervalSeconds: 1,   // interval between probe data uploads (default: 1s)
+    redactedIdentifiers: [],    // additional identifiers to redact
+    redactionExcludedIdentifiers: [], // identifiers to exclude from built-in redaction
+    probeFile: '/path/to/probes.json', // path to local probes config file
+  }
+  ```
+
+  **Env:** `DD_DYNAMIC_INSTRUMENTATION_ENABLED`, `DD_DYNAMIC_INSTRUMENTATION_CAPTURE_TIMEOUT_MS`, `DD_DYNAMIC_INSTRUMENTATION_UPLOAD_INTERVAL_SECONDS`, `DD_DYNAMIC_INSTRUMENTATION_REDACTED_IDENTIFIERS`, `DD_DYNAMIC_INSTRUMENTATION_REDACTION_EXCLUDED_IDENTIFIERS`, `DD_DYNAMIC_INSTRUMENTATION_PROBE_FILE`
+</ParamField>
+
+## Runtime metrics (additional)
+
+<ParamField body="runtimeMetricsRuntimeId" type="boolean" default="false">
+  Whether to add an auto-generated `runtime-id` tag to runtime metrics. Useful for correlating metrics from the same process instance.
+
+  **Env:** `DD_RUNTIME_METRICS_RUNTIME_ID_ENABLED`
+</ParamField>
+
+## Database Monitoring (DBM)
+
+<ParamField body="dbm" type="object">
+  Advanced Database Monitoring configuration.
+
+  ```javascript
+  dbm: {
+    injectSqlBaseHash: false, // inject SQL base hash in DBM comments for process tag correlation
+  }
+  ```
+
+  **Env:** `DD_DBM_INJECT_SQL_BASEHASH`
+
+  <Note>
+    `injectSqlBaseHash` requires `DD_EXPERIMENTAL_PROPAGATE_PROCESS_TAGS_ENABLED=true` to take effect.
+  </Note>
+</ParamField>
+
 ## Experimental options
 
 <ParamField body="experimental" type="object">
@@ -356,6 +401,17 @@ const tracer = require('dd-trace').init({
     exporter: 'agent', // 'log' | 'agent' | 'datadog'
     enableGetRumData: false,
     b3: false,
+    aiguard: {
+      enabled: false,        // DD_AI_GUARD_ENABLED
+      endpoint: undefined,   // DD_AI_GUARD_ENDPOINT
+      timeout: 5000,         // DD_AI_GUARD_TIMEOUT (ms)
+      maxMessagesLength: undefined, // DD_AI_GUARD_MAX_MESSAGES_LENGTH
+      maxContentSize: undefined,    // DD_AI_GUARD_MAX_CONTENT_SIZE
+    },
+    flaggingProvider: {
+      enabled: false,               // DD_EXPERIMENTAL_FLAGGING_PROVIDER_ENABLED
+      initializationTimeoutMs: 30000, // DD_EXPERIMENTAL_FLAGGING_PROVIDER_INITIALIZATION_TIMEOUT_MS
+    },
   }
   ```
 

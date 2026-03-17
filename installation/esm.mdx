@@ -41,27 +41,22 @@ node --import dd-trace/register.js server.mjs
 
 ### Programmatic configuration with --import
 
-If you need programmatic configuration, create a custom initialization module and pass it to `--import`:
-
-```javascript initialize.mjs
-import tracer from 'dd-trace'
-
-tracer.init({
-  service: 'my-service',
-  env: 'production',
-  logInjection: true,
-})
-
-export default tracer
-```
+`--import dd-trace/register.js` reads configuration from environment variables only. For programmatic configuration alongside ESM, use the built-in `dd-trace/initialize.mjs` via `--loader` (which also self-registers the hook), or pass configuration through environment variables when using `--import`:
 
 ```bash
-node --import ./initialize.mjs server.mjs
+DD_SERVICE=my-service DD_ENV=production DD_LOGS_INJECTION=true \
+  node --import dd-trace/register.js server.mjs
 ```
 
-<Note>
-When using a custom `--import` file for configuration, do **not** also pass `--import dd-trace/register.js`. Your custom file handles both configuration and loader registration through `tracer.init()`.
-</Note>
+Alternatively, use the `dd-trace/initialize.mjs` module with `--loader`, which both registers the hook and initializes the tracer programmatically — but note `--loader` is deprecated as of Node.js 20:
+
+```bash
+node --loader dd-trace/initialize.mjs server.mjs
+```
+
+<Warning>
+Do not pass a custom user-written ESM module to `--import` for tracer configuration. A module loaded via `--import` runs _after_ the module system is set up, so simply calling `tracer.init()` inside it will **not** register the ESM instrumentation hooks for subsequently loaded modules. Always use `--import dd-trace/register.js` (and configure via environment variables) or `--loader dd-trace/initialize.mjs`.
+</Warning>
 
 ### package.json scripts
 

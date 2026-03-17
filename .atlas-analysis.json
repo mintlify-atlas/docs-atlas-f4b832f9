@@ -1,0 +1,153 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "dd-trace: Node.js APM Tracer",
+  "projectDescription": "Datadog's official APM tracing client for Node.js that automatically instruments 100+ libraries and provides manual instrumentation APIs for distributed tracing, profiling, AppSec, LLM observability, and CI visibility.",
+  "theme": "linden",
+  "primaryColor": "#7341af",
+  "lightColor": "#baa0d7",
+  "darkColor": "#e4daef",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Getting Started",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Installation",
+            "pages": ["installation/nodejs", "installation/esm", "installation/bundling", "installation/serverless"]
+          },
+          {
+            "group": "Configuration",
+            "pages": ["configuration/options", "configuration/environment-variables", "configuration/sampling"]
+          }
+        ]
+      },
+      {
+        "tab": "Instrumentation",
+        "groups": [
+          {
+            "group": "Automatic Instrumentation",
+            "pages": ["instrumentation/automatic", "instrumentation/plugins-overview"]
+          },
+          {
+            "group": "Manual Instrumentation",
+            "pages": ["instrumentation/manual/tracing", "instrumentation/manual/spans", "instrumentation/manual/scope"]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/web-frameworks",
+              "integrations/databases",
+              "integrations/messaging",
+              "integrations/ai-ml",
+              "integrations/testing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Features",
+        "groups": [
+          {
+            "group": "Application Security",
+            "pages": ["features/appsec/overview", "features/appsec/iast"]
+          },
+          {
+            "group": "Profiling",
+            "pages": ["features/profiling/overview"]
+          },
+          {
+            "group": "LLM Observability",
+            "pages": ["features/llmobs/overview", "features/llmobs/sdk"]
+          },
+          {
+            "group": "CI Visibility",
+            "pages": ["features/ci-visibility/overview"]
+          },
+          {
+            "group": "Dynamic Instrumentation",
+            "pages": ["features/debugger/overview"]
+          },
+          {
+            "group": "Data Streams",
+            "pages": ["features/data-streams/overview"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Tracer API",
+            "pages": ["api/tracer", "api/span", "api/scope", "api/span-context"]
+          },
+          {
+            "group": "OpenTelemetry",
+            "pages": ["api/opentelemetry/tracing", "api/opentelemetry/metrics", "api/opentelemetry/logs"]
+          },
+          {
+            "group": "OpenTracing",
+            "pages": ["api/opentracing"]
+          },
+          {
+            "group": "Additional APIs",
+            "pages": ["api/appsec", "api/llmobs", "api/dogstatsd", "api/data-streams"]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Migration",
+            "pages": ["guides/migrating-v4-to-v5", "guides/migrating-v3-to-v4"]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": ["guides/distributed-tracing", "guides/log-correlation", "guides/custom-tags", "guides/user-identification"]
+          },
+          {
+            "group": "Compatibility",
+            "pages": ["guides/compatibility/nodejs-versions", "guides/compatibility/release-lines"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Automatic instrumentation for 100+ Node.js libraries and frameworks",
+    "Manual instrumentation API with tracer.trace() and tracer.wrap()",
+    "OpenTelemetry and OpenTracing compatibility",
+    "Application Security (AppSec) with IAST and RASP",
+    "Continuous Profiler for CPU, memory, and wall-time profiling",
+    "LLM Observability SDK for AI/ML monitoring",
+    "CI Visibility for test reporting and flaky test detection",
+    "Dynamic Instrumentation (debugger) for live debugging",
+    "Data Streams Monitoring for pipeline observability",
+    "Runtime metrics and DogStatsD integration"
+  ],
+  "publicApiSurface": [
+    "tracer.init(options)",
+    "tracer.trace(name, options, fn)",
+    "tracer.wrap(name, options, fn)",
+    "tracer.startSpan(name, options)",
+    "tracer.inject(spanContext, format, carrier)",
+    "tracer.extract(format, carrier)",
+    "tracer.scope()",
+    "tracer.use(plugin, config)",
+    "tracer.setUser(user)",
+    "tracer.setUrl(url)",
+    "tracer.getRumData()",
+    "tracer.appsec",
+    "tracer.llmobs",
+    "tracer.dogstatsd",
+    "tracer.dataStreamsCheckpointer",
+    "tracer.TracerProvider",
+    "scope.active()",
+    "scope.activate(span, fn)",
+    "scope.bind(target, span)"
+  ]
+}

@@ -1,0 +1,174 @@
+---
+title: "Manual Tracing"
+description: "Create and manage spans manually using tracer.trace() and tracer.wrap()."
+---
+
+For code that is not covered by automatic instrumentation, use `tracer.trace()` and `tracer.wrap()` to create spans manually. Both methods handle the span lifecycle and scope activation automatically.
+
+## `tracer.trace(name, [options], fn)`
+
+Instruments a function by creating a new span for the duration of the function's execution. The span is automatically finished when the function completes, the returned promise resolves/rejects, or the provided callback is called.
+
+### Type signatures
+
+```typescript
+trace<T>(name: string, fn: (span: Span) => T): T
+trace<T>(name: string, fn: (span: Span, done: (error?: Error) => void) => T): T
+trace<T>(name: string, options: TraceOptions & SpanOptions, fn: (span?: Span, done?: (error?: Error) => void) => T): T
+```
+
+### Options
+
+`tracer.trace()` accepts standard `SpanOptions` plus these additional `TraceOptions` fields:
+
+| Option | Type | Description |
+|---|---|---|
+| `resource` | `string` | The resource being traced (max 5000 chars). |
+| `service` | `string` | Override the service name for this span (max 100 chars). |
+| `type` | `string` | The type of request (e.g. `'web'`, `'db'`). |
+| `childOf` | `Span \| SpanContext \| null` | Explicit parent. Pass `null` to force a root span. |
+| `tags` | `{ [key: string]: any }` | Tags to set on the span at creation. |
+| `measured` | `boolean` | Whether to measure the span for metrics. |
+| `links` | `{ context: SpanContext, attributes?: Object }[]` | Span links to add at creation. |
+
+### Synchronous
+
+The span finishes when the callback returns. Any thrown error is automatically recorded on the span.
+
+```javascript
+const tracer = require('dd-trace').init()
+
+function handle (err) {
+  tracer.trace('web.request', span => {
+    // some code
+  })
+}
+```
+
+### Callback (async)
+
+Pass a second parameter `done` to the callback. The span finishes when `done` is called. Any error passed to `done` is automatically recorded.
+
+```javascript
+function handle (err) {
+  tracer.trace('web.request', (span, done) => {
+    // some code
+    done(err)
+  })
+}
+```
+
+### Promise
+
+Return a `Promise` from the callback. The span finishes when the promise resolves or rejects. Rejected promise errors are automatically recorded.
+
+```javascript
+function handle () {
+  return tracer.trace('web.request', () => {
+    return new Promise((resolve, reject) => {
+      // some code
+    })
+  })
+}
+```
+
+### Async/await
+
+Return an `async` function or `await` inside the callback. The span lifecycle follows the returned promise.
+
+```javascript
+async function handle () {
+  return await tracer.trace('web.request', async () => {
+    // some code
+  })
+}
+```
+
+### With options
+
+```javascript
+const tracer = require('dd-trace').init()
+
+async function fetchUser (userId) {
+  return await tracer.trace('user.fetch', {
+    resource: `user:${userId}`,
+    service: 'user-service',
+    type: 'db',
+    tags: { 'user.id': userId }
+  }, async (span) => {
+    const user = await db.query('SELECT * FROM users WHERE id = $1', [userId])
+    span.setTag('user.found', user != null)
+    return user
+  })
+}
+```
+
+## `tracer.wrap(name, [options], fn)`
+
+Returns a wrapped version of the provided function. Every time the wrapped function is called, `tracer.trace()` is called automatically. This is useful for patching functions that are defined elsewhere.
+
+### Type signatures
+
+```typescript
+wrap<T = (...args: any[]) => any>(name: string, fn: T): T
+wrap<T = (...args: any[]) => any>(name: string, options: TraceOptions & SpanOptions, fn: T): T
+wrap<T = (...args: any[]) => any>(name: string, options: (...args: any[]) => TraceOptions & SpanOptions, fn: T): T
+```
+
+### Basic usage
+
+```javascript
+function handle () {
+  // some code
+}
+
+const handleWithTrace = tracer.wrap('web.request', handle)
+```
+
+### Callback functions
+
+If the last argument of the wrapped function is a callback, the span finishes when that callback is called:
+
+```javascript
+function handle (a, b, c, callback) {
+  // some code
+  callback()
+}
+
+const handleWithTrace = tracer.wrap('web.request', handle)
+```
+
+### Dynamic options
+
+Pass a function as `options` to compute trace options from the wrapped function's arguments at call time:
+
+```javascript
+const handleWithTrace = tracer.wrap(
+  'user.fetch',
+  (userId) => ({ resource: `user:${userId}` }),
+  fetchUser
+)
+```
+
+## `tracer.startSpan(name, [options])`
+
+For lower-level control, `startSpan` creates a span without activating it on the current scope. You are responsible for finishing it.
+
+```javascript
+const span = tracer.startSpan('web.request', {
+  childOf: tracer.scope().active()
+})
+
+try {
+  // some code
+} catch (err) {
+  span.setTag('error', err)
+  throw err
+} finally {
+  span.finish()
+}
+```
+
+<Warning>
+  Unlike `tracer.trace()`, spans created with `startSpan` are **not** automatically activated on the scope. Use `tracer.scope().activate()` if you need child spans or automatic context propagation.
+</Warning>

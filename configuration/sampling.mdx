@@ -1,0 +1,237 @@
+---
+title: "Sampling configuration"
+description: "Control which traces are kept, at what rate, using priority sampling, sampling rules, and span sampling rules."
+---
+
+## Overview
+
+dd-trace uses a **priority sampling** system. Each trace is assigned a numeric priority that determines whether the trace is kept or dropped:
+
+| Priority | Meaning |
+| --- | --- |
+| `-1` | User-forced drop |
+| `0` | Sampler-decided drop |
+| `1` | Sampler-decided keep |
+| `2` | User-forced keep |
+
+The priority is set on the root span and propagated to all child spans and downstream services so that the entire distributed trace is either fully sampled or fully dropped.
+
+## Default behavior: priority sampling
+
+When no `sampleRate` or `samplingRules` are configured, the Datadog Agent determines sampling rates automatically based on traffic volume and configures the tracer via the **priority sampling** feedback loop. This is the recommended approach for most applications.
+
+## Global sample rate
+
+Set a fixed rate applied to all traces:
+
+<Tabs>
+  <Tab title="Programmatic">
+
+```javascript
+require('dd-trace').init({
+  sampleRate: 0.5, // keep 50% of traces
+})
+```
+
+  </Tab>
+  <Tab title="Environment variable">
+
+```bash
+DD_TRACE_SAMPLE_RATE=0.5 node app.js
+```
+
+  </Tab>
+</Tabs>
+
+Values:
+- `1.0` — keep all traces
+- `0.5` — keep 50% of traces
+- `0.0` — drop all traces
+
+<Warning>
+Setting `sampleRate` overrides Agent-side priority sampling for the affected traces. Use sampling rules for fine-grained control instead of a global rate.
+</Warning>
+
+## Sampling rules
+
+Sampling rules let you apply different rates to specific services or operations. Rules are evaluated in order; the first matching rule determines the rate.
+
+### Rule structure
+
+```typescript
+interface SamplingRule {
+  sampleRate: number        // required, 0–1
+  service?: string | RegExp // match against span service name
+  name?: string | RegExp    // match against span operation name
+}
+```
+
+### Programmatic rules
+
+```javascript
+require('dd-trace').init({
+  samplingRules: [
+    // Keep all traces from 'checkout' service
+    { service: 'checkout', sampleRate: 1.0 },
+
+    // Keep 10% of traces for services starting with 'worker-'
+    { service: /^worker-/, sampleRate: 0.1 },
+
+    // Keep 5% of express.request spans in any service
+    { name: 'express.request', sampleRate: 0.05 },
+
+    // Keep all traces from a specific service+operation combination
+    { service: 'my-api', name: 'pg.query', sampleRate: 1.0 },
+  ],
+})
+```
+
+### Rules via environment variable
+
+Pass rules as a JSON array in `DD_TRACE_SAMPLING_RULES`:
+
+```bash
+DD_TRACE_SAMPLING_RULES='[
+  {"service":"checkout","sampleRate":1.0},
+  {"service":"worker","sampleRate":0.1}
+]' node app.js
+```
+
+<Note>
+Service and name values in environment variable rules are treated as regex patterns.
+</Note>
+
+## Rate limiting
+
+The `rateLimit` option caps the number of sampled traces per second, regardless of the `sampleRate` or `samplingRules`. This prevents traffic spikes from sending too many traces to the Agent:
+
+```javascript
+require('dd-trace').init({
+  sampleRate: 1.0,
+  rateLimit: 200, // at most 200 sampled traces/second
+})
+```
+
+```bash
+DD_TRACE_SAMPLE_RATE=1.0
+DD_TRACE_RATE_LIMIT=200
+```
+
+## Span sampling rules
+
+Span sampling rules keep individual spans from traces that were dropped at the trace level. This is useful for keeping specific spans (e.g., slow database queries) without keeping the full trace.
+
+### Rule structure
+
+```typescript
+interface SpanSamplingRule {
+  sampleRate?: number   // default 1.0
+  maxPerSecond?: number // rate cap per rule
+  service?: string      // exact match or glob pattern
+  name?: string         // exact match or glob pattern
+}
+```
+
+### Programmatic span sampling rules
+
+```javascript
+require('dd-trace').init({
+  spanSamplingRules: [
+    // Keep all redis spans even from dropped traces
+    { service: 'redis', name: 'redis.command', sampleRate: 1.0 },
+
+    // Keep pg.query spans, capped at 50/second
+    { service: 'pg', name: 'pg.query', sampleRate: 1.0, maxPerSecond: 50 },
+  ],
+})
+```
+
+### Span sampling rules via environment variable
+
+```bash
+DD_SPAN_SAMPLING_RULES='[
+  {"service":"redis","name":"redis.command","sampleRate":1.0},
+  {"service":"pg","name":"pg.query","sampleRate":1.0,"maxPerSecond":50}
+]' node app.js
+```
+
+Or load rules from a JSON file:
+
+```bash
+DD_SPAN_SAMPLING_RULES_FILE=/etc/dd/span-sampling-rules.json node app.js
+```
+
+## Remote configuration sampling
+
+When Remote Configuration is enabled (the default), the Datadog backend can update sampling rates for your services without redeployment. Remote Config sampling decisions override `sampleRate` and `samplingRules` set at initialization time.
+
+Remote Config is enabled by default. Disable it with:
+
+```bash
+DD_REMOTE_CONFIGURATION_ENABLED=false
+```
+
+Or programmatically:
+
+```javascript
+require('dd-trace').init({
+  // no direct option; use env var or remoteConfig object
+  remoteConfig: {
+    pollInterval: 5, // seconds
+  },
+})
+```
+
+## Force-keeping or force-dropping a trace
+
+Override the sampling decision for the current trace using `tracer.scope()` and the span's `setTag` API with the `sampling.priority` tag:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+// Force keep
+const span = tracer.scope().active()
+if (span) {
+  span.setTag('sampling.priority', 2) // USER_KEEP
+}
+
+// Force drop
+if (span) {
+  span.setTag('sampling.priority', -1) // USER_REJECT
+}
+```
+
+## Example: environment-specific sampling
+
+```bash
+# Development: keep all traces
+DD_ENV=development
+DD_TRACE_SAMPLE_RATE=1.0
+
+# Staging: keep 50%
+DD_ENV=staging
+DD_TRACE_SAMPLE_RATE=0.5
+
+# Production: let the Agent decide (default priority sampling)
+DD_ENV=production
+# DD_TRACE_SAMPLE_RATE not set
+```
+
+## Example: high-value endpoint with full sampling
+
+```javascript
+require('dd-trace').init({
+  samplingRules: [
+    // Always keep checkout and payment traces
+    { service: 'checkout-api', sampleRate: 1.0 },
+    { service: 'payment-service', sampleRate: 1.0 },
+    // Sample everything else at 10%
+    { sampleRate: 0.1 },
+  ],
+  rateLimit: 500,
+})
+```
+
+<Tip>
+When combining `samplingRules` with a catch-all rule (no `service` or `name`), put the catch-all rule last. Rules are evaluated in order and the first match wins.
+</Tip>

@@ -1,0 +1,202 @@
+---
+title: "Test framework integrations"
+description: "Automatic CI Visibility tracing for Jest, Mocha, Cucumber, Cypress, Playwright, Vitest, and Selenium."
+---
+
+dd-trace instruments test frameworks to automatically report test results, durations, and failures to [CI Visibility](https://docs.datadoghq.com/tests/) in Datadog. Each test run, suite, and session produces spans that integrate with the Datadog Test Optimization product.
+
+## Supported frameworks
+
+<CardGroup cols={3}>
+  <Card title="Jest" icon="flask">`jest`</Card>
+  <Card title="Mocha" icon="flask">`mocha`</Card>
+  <Card title="Cucumber" icon="leaf">`@cucumber/cucumber`</Card>
+  <Card title="Cypress" icon="vial">`cypress`</Card>
+  <Card title="Playwright" icon="theater-masks">`@playwright/test`</Card>
+  <Card title="Vitest" icon="bolt">`vitest`</Card>
+  <Card title="Selenium" icon="robot">`selenium-webdriver`</Card>
+</CardGroup>
+
+## Enabling CI Visibility
+
+CI Visibility activates automatically when a test framework plugin is loaded. Set these environment variables in your CI pipeline:
+
+```bash
+DD_CIVISIBILITY_ENABLED=true
+DD_API_KEY=<your-api-key>
+DD_SERVICE=my-service
+DD_ENV=ci
+```
+
+Or enable agentless mode to send results directly without a Datadog Agent:
+
+```bash
+DD_CIVISIBILITY_AGENTLESS_ENABLED=true
+DD_API_KEY=<your-api-key>
+```
+
+<Note>
+  Agentless mode requires `DD_API_KEY` to be set. Agent mode requires a reachable Datadog Agent.
+</Note>
+
+## Jest
+
+dd-trace automatically patches Jest internals when any of the `jest-circus`, `jest-runtime`, `jest-worker`, `@jest/core`, or related packages are loaded.
+
+```javascript
+// jest.config.js — no special configuration needed
+module.exports = {
+  testEnvironment: 'node',
+  // dd-trace instruments Jest automatically
+}
+```
+
+Run tests as usual:
+
+```bash
+DD_CIVISIBILITY_ENABLED=true npx jest
+```
+
+The plugin captures:
+- Test name, suite, and status (pass / fail / skip)
+- Duration and error messages
+- Code coverage when enabled
+- CI environment metadata (branch, commit, pipeline URL)
+
+## Mocha
+
+```bash
+DD_CIVISIBILITY_ENABLED=true npx mocha test/**/*.spec.js
+```
+
+Configure the plugin:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('mocha', {
+  service: 'mocha-tests'
+})
+```
+
+The `mocha-each` package for parameterized tests is also automatically instrumented.
+
+## Cucumber
+
+```bash
+DD_CIVISIBILITY_ENABLED=true npx cucumber-js
+```
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('cucumber', {
+  service: 'cucumber-tests'
+})
+```
+
+Scenario names, feature file paths, and step results are captured as span tags.
+
+## Cypress
+
+For Cypress, add the dd-trace plugin to your Cypress configuration:
+
+```javascript
+// cypress.config.js
+const { defineConfig } = require('cypress')
+
+module.exports = defineConfig({
+  e2e: {
+    setupNodeEvents (on, config) {
+      // dd-trace instruments Cypress automatically when the plugin loads
+      require('dd-trace').init()
+    }
+  }
+})
+```
+
+```bash
+DD_CIVISIBILITY_ENABLED=true npx cypress run
+```
+
+## Playwright
+
+```javascript
+// playwright.config.js
+const { defineConfig } = require('@playwright/test')
+
+// Initialize dd-trace before any test code runs
+require('dd-trace').init()
+
+module.exports = defineConfig({
+  testDir: './tests'
+})
+```
+
+```bash
+DD_CIVISIBILITY_ENABLED=true npx playwright test
+```
+
+## Vitest
+
+```bash
+DD_CIVISIBILITY_ENABLED=true npx vitest run
+```
+
+```javascript
+// vitest.config.js
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    // dd-trace instruments Vitest automatically via the @vitest/runner hook
+  }
+})
+```
+
+## Selenium
+
+The `selenium-webdriver` plugin instruments browser session spans:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('selenium', {
+  service: 'selenium-tests'
+})
+
+const { Builder } = require('selenium-webdriver')
+const driver = await new Builder().forBrowser('chrome').build()
+
+// Navigation and interaction spans are created automatically
+await driver.get('https://example.com')
+```
+
+## Test tagging
+
+Add custom tags to the active test span using `tracer.scope().active()`:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+beforeEach(() => {
+  const span = tracer.scope().active()
+  if (span) {
+    span.setTag('test.category', 'integration')
+    span.setTag('test.team', 'platform')
+  }
+})
+```
+
+## CI environment variables
+
+dd-trace automatically reads standard CI environment variables to tag test spans with pipeline metadata.
+
+| Variable | Description |
+|---|---|
+| `DD_SERVICE` | Service name for test spans. |
+| `DD_ENV` | Environment (e.g., `ci`, `staging`). |
+| `DD_VERSION` | Application version. |
+| `DD_CIVISIBILITY_ENABLED` | Enable CI Visibility. |
+| `DD_CIVISIBILITY_AGENTLESS_ENABLED` | Send results without an Agent. |
+| `DD_API_KEY` | Required for agentless mode. |

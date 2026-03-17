@@ -1,0 +1,317 @@
+---
+title: "LLM Observability SDK"
+description: "Manually instrument LLM calls, annotate spans, submit evaluations, and control LLMObs programmatically using the tracer.llmobs SDK."
+---
+
+The `tracer.llmobs` SDK lets you manually create LLMObs spans, annotate them with inputs/outputs and metrics, submit evaluation scores, and control the LLMObs lifecycle programmatically.
+
+## Prerequisites
+
+Enable LLMObs before using any SDK methods. See [LLM Observability Overview](/features/llmobs/overview) for setup instructions.
+
+## Lifecycle methods
+
+### enable(options)
+
+Enables LLMObs programmatically. Has no effect if `DD_LLMOBS_ENABLED=false` is set.
+
+```javascript
+tracer.llmobs.enable({
+  mlApp: 'my-llm-app',
+  agentlessEnabled: false, // set true if no Datadog Agent is running
+})
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `mlApp` | `string` | Name of your ML application |
+| `agentlessEnabled` | `boolean` | Send data directly to Datadog without an Agent |
+
+### disable()
+
+Disables LLMObs. Stops writers and unsubscribes channel listeners.
+
+```javascript
+tracer.llmobs.disable()
+```
+
+### flush()
+
+Forces all buffered LLMObs spans and evaluation metrics to be sent immediately. Use this in serverless environments (AWS Lambda, Vercel, etc.) where the process may exit before the next scheduled flush.
+
+```javascript
+exports.handler = async (event) => {
+  const result = await runLLMPipeline(event)
+  await tracer.llmobs.flush()
+  return result
+}
+```
+
+## Creating spans
+
+### trace(options, fn)
+
+Instruments a function by creating an LLMObs span that is active for the duration of the function. The span is automatically finished when the function returns, resolves (if it returns a promise), or calls its callback.
+
+```javascript
+const { tracer } = require('dd-trace')
+
+async function callOpenAI(messages) {
+  return tracer.llmobs.trace(
+    {
+      kind: 'llm',
+      name: 'openai.chat',
+      modelName: 'gpt-4o',
+      modelProvider: 'openai',
+      sessionId: 'user-session-abc',
+    },
+    async (span) => {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages,
+      })
+
+      tracer.llmobs.annotate(span, {
+        inputData: messages,
+        outputData: [{ role: 'assistant', content: response.choices[0].message.content }],
+        metrics: {
+          inputTokens: response.usage.prompt_tokens,
+          outputTokens: response.usage.completion_tokens,
+          totalTokens: response.usage.total_tokens,
+        },
+      })
+
+      return response
+    }
+  )
+}
+```
+
+**Options:**
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `kind` | `spanKind` | Yes | One of `llm`, `embedding`, `retrieval`, `tool`, `task`, `agent`, `workflow` |
+| `name` | `string` | Yes | Name of the operation |
+| `modelName` | `string` | No | LLM or embedding model name. Only used on `llm` and `embedding` spans. |
+| `modelProvider` | `string` | No | Model provider (e.g. `openai`). Defaults to `custom`. |
+| `sessionId` | `string` | No | User session ID for session tracking |
+| `mlApp` | `string` | No | ML app name override for this span |
+
+### wrap(options, fn)
+
+Wraps a function so that an LLMObs span is automatically created every time the wrapped function is called. Useful for decorating existing functions.
+
+```javascript
+const retrieveDocs = tracer.llmobs.wrap(
+  { kind: 'retrieval', name: 'vectordb.search' },
+  async function retrieveDocs(query) {
+    const results = await vectorDb.search(query, { topK: 5 })
+    return results
+  }
+)
+
+// Every call to retrieveDocs() now creates an LLMObs span
+const docs = await retrieveDocs('What is LLM Observability?')
+```
+
+For functions with callbacks:
+
+```javascript
+const processWithCb = tracer.llmobs.wrap(
+  { kind: 'task', name: 'process' },
+  function process(input, callback) {
+    // ... do work
+    callback(null, result)
+  }
+)
+```
+
+The `wrap` method attempts to automatically annotate the span with the function's arguments as input and its return value (or callback result) as output for non-`llm` and non-`embedding` span kinds.
+
+## Annotating spans
+
+### annotate(span?, options)
+
+Sets inputs, outputs, metadata, metrics, and tags on an LLMObs span. If no span is provided, annotates the currently active LLMObs span. Calling `annotate` overwrites any previously set values for each field.
+
+```javascript
+tracer.llmobs.annotate({
+  inputData: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Summarise this document.' },
+  ],
+  outputData: [
+    { role: 'assistant', content: 'Here is a summary...' },
+  ],
+  metadata: { temperature: 0.7, maxTokens: 512 },
+  metrics: { inputTokens: 42, outputTokens: 18, totalTokens: 60 },
+  tags: { environment: 'production', version: '2.1.0' },
+})
+```
+
+**Annotation options:**
+
+| Field | Description |
+|---|---|
+| `inputData` | Input for the span. For `llm` spans: message objects `{ content, role }`. For `embedding` spans: strings or objects `{ text, ... }`. For all other kinds: any JSON-serialisable value. |
+| `outputData` | Output for the span. For `llm` spans: message objects. For `retrieval` spans: document objects `{ name, id, text, score }`. For all other kinds: any JSON-serialisable value. |
+| `metadata` | Key-value pairs with operation metadata (e.g., temperature, max tokens). |
+| `metrics` | Numeric key-value pairs. Commonly `{ inputTokens, outputTokens, totalTokens }`. |
+| `tags` | Key-value string pairs for span context. |
+| `prompt` | Prompt template metadata. Only used on `llm` spans. |
+
+### annotationContext(options, fn)
+
+Applies annotation context to all LLMObs spans — including auto-instrumented spans — created within the provided function. Useful for propagating tags or prompt information without manually annotating every span.
+
+```javascript
+tracer.llmobs.annotationContext(
+  { tags: { userId: 'user-123', sessionId: 'sess-abc' } },
+  () => {
+    // All LLMObs spans created in this block get the tags above
+    return runAgentPipeline(userInput)
+  }
+)
+```
+
+## Exporting span context
+
+### exportSpan(span?)
+
+Returns the `traceId` and `spanId` of an LLMObs span as plain strings. Use this to associate evaluation metrics with a specific span after the fact.
+
+```javascript
+const spanContext = tracer.llmobs.exportSpan(span)
+// { traceId: '...', spanId: '...' }
+```
+
+## Evaluation metrics
+
+### submitEvaluation(spanContext, options)
+
+Submits a custom evaluation metric for a specific span. The span must be identified by the `traceId` and `spanId` returned from `exportSpan()`.
+
+```javascript
+const spanContext = tracer.llmobs.exportSpan(span)
+
+tracer.llmobs.submitEvaluation(spanContext, {
+  label: 'response_quality',
+  metricType: 'score',       // 'categorical' | 'score' | 'boolean' | 'json'
+  value: 0.92,
+  tags: { evaluator: 'human' },
+  reasoning: 'Response was accurate and well-structured.',
+})
+```
+
+**Evaluation options:**
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `label` | `string` | Yes | Name of the evaluation metric |
+| `metricType` | `string` | Yes | One of `categorical`, `score`, `boolean`, `json` |
+| `value` | varies | Yes | String for categorical, number for score, boolean for boolean, object for json |
+| `mlApp` | `string` | No | ML app override |
+| `timestampMs` | `number` | No | Timestamp of the evaluation in milliseconds |
+| `tags` | `object` | No | String key-value tags |
+| `reasoning` | `string` | No | Explanation for the evaluation result |
+| `assessment` | `'pass' \| 'fail'` | No | Pass/fail assessment |
+| `metadata` | `object` | No | Arbitrary JSON metadata |
+
+## Custom span processors
+
+### registerProcessor(processor)
+
+Registers a callback that is invoked for every finished LLMObs span before it is sent. Use this to modify span data, add tags, or drop spans entirely (by returning `null`).
+
+```javascript
+tracer.llmobs.registerProcessor((span) => {
+  // Redact PII from outputs
+  if (span.output) {
+    span.output = span.output.map(msg => ({
+      ...msg,
+      content: redactPII(msg.content),
+    }))
+  }
+  return span // return null to drop the span
+})
+```
+
+Only one processor can be registered at a time. Call `deregisterProcessor()` before registering a new one.
+
+### deregisterProcessor()
+
+Removes the currently registered span processor.
+
+```javascript
+tracer.llmobs.deregisterProcessor()
+```
+
+## Routing context
+
+### routingContext(options, fn)
+
+Runs a function in a routing context that sends all LLMObs spans to a specific Datadog organisation. Useful for multi-tenant setups.
+
+```javascript
+tracer.llmobs.routingContext(
+  {
+    ddApiKey: 'customer-dd-api-key',
+    ddSite: 'datadoghq.eu',  // optional, defaults to your configured site
+  },
+  () => {
+    return runCustomerPipeline()
+  }
+)
+```
+
+## Complete example
+
+```javascript
+const tracer = require('dd-trace').init({
+  llmobs: { mlApp: 'support-bot' },
+})
+
+async function handleUserMessage(userId, message) {
+  return tracer.llmobs.trace(
+    { kind: 'agent', name: 'support-agent', sessionId: userId },
+    async (agentSpan) => {
+      // Step 1: retrieve relevant docs
+      const docs = await tracer.llmobs.trace(
+        { kind: 'retrieval', name: 'knowledge-base' },
+        async (span) => {
+          const results = await vectorDb.search(message)
+          tracer.llmobs.annotate(span, { outputData: results })
+          return results
+        }
+      )
+
+      // Step 2: call LLM
+      const reply = await tracer.llmobs.trace(
+        { kind: 'llm', name: 'gpt-4o', modelName: 'gpt-4o', modelProvider: 'openai' },
+        async (llmSpan) => {
+          const response = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              { role: 'system', content: buildSystemPrompt(docs) },
+              { role: 'user', content: message },
+            ],
+          })
+          tracer.llmobs.annotate(llmSpan, {
+            inputData: [{ role: 'user', content: message }],
+            outputData: [{ role: 'assistant', content: response.choices[0].message.content }],
+            metrics: {
+              inputTokens: response.usage.prompt_tokens,
+              outputTokens: response.usage.completion_tokens,
+              totalTokens: response.usage.total_tokens,
+            },
+          })
+          return response.choices[0].message.content
+        }
+      )
+
+      return reply
+    }
+  )
+}
+```

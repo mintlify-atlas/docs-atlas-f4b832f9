@@ -1,0 +1,145 @@
+---
+title: "ESM support"
+description: "How to use dd-trace with ECMAScript modules (ESM) using the --import flag or the legacy --loader approach."
+---
+
+## Overview
+
+ESM (ECMAScript Modules) applications use `import` statements rather than `require()`. Because dd-trace uses module load hooks to instrument third-party packages, ESM requires a different initialization approach from CommonJS.
+
+<Warning>
+You cannot call `require('dd-trace').init()` at the top of an ESM file and expect instrumentation to work. By the time your module executes, other ESM modules have already been evaluated. Use one of the approaches on this page instead.
+</Warning>
+
+## Recommended: --import flag (Node.js 18.19+)
+
+Pass `--import dd-trace/register.js` on the command line. This registers dd-trace's ESM loader hook before any application modules are loaded:
+
+```bash
+node --import dd-trace/register.js server.mjs
+```
+
+The `register.js` file calls `node:module`'s `register()` API to install `loader-hook.mjs` as a module customization hook:
+
+```javascript register.js (dd-trace source)
+const { register } = require('node:module')
+const { pathToFileURL } = require('node:url')
+
+register('./loader-hook.mjs', pathToFileURL(__filename))
+```
+
+### Configuration with --import
+
+Provide all configuration through environment variables when using `--import dd-trace/register.js`:
+
+```bash
+DD_SERVICE=my-service \
+DD_ENV=production \
+DD_VERSION=1.0.0 \
+node --import dd-trace/register.js server.mjs
+```
+
+### Programmatic configuration with --import
+
+If you need programmatic configuration, create a custom initialization module and pass it to `--import`:
+
+```javascript initialize.mjs
+import tracer from 'dd-trace'
+
+tracer.init({
+  service: 'my-service',
+  env: 'production',
+  logInjection: true,
+})
+
+export default tracer
+```
+
+```bash
+node --import ./initialize.mjs server.mjs
+```
+
+<Note>
+When using a custom `--import` file for configuration, do **not** also pass `--import dd-trace/register.js`. Your custom file handles both configuration and loader registration through `tracer.init()`.
+</Note>
+
+### package.json scripts
+
+```json package.json
+{
+  "type": "module",
+  "scripts": {
+    "start": "node --import dd-trace/register.js server.mjs",
+    "start:dev": "DD_ENV=development node --import dd-trace/register.js server.mjs"
+  }
+}
+```
+
+### NODE_OPTIONS
+
+```bash
+NODE_OPTIONS='--import dd-trace/register.js' node server.mjs
+```
+
+Or set it in your shell profile / deployment environment so it applies to all Node.js processes.
+
+## Legacy: --loader flag
+
+For Node.js versions before 18.19, use the `--loader` flag:
+
+```bash
+node --loader dd-trace/loader-hook.mjs server.mjs
+```
+
+<Warning>
+The `--loader` API is deprecated as of Node.js 20.x and may emit an `ExperimentalWarning`. Use `--import` with Node.js >= 18.19 whenever possible.
+</Warning>
+
+Suppress the experimental warning in older Node.js:
+
+```bash
+NODE_NO_WARNINGS=1 node --loader dd-trace/loader-hook.mjs server.mjs
+```
+
+## Mixed CJS/ESM projects
+
+If your application mixes CommonJS and ESM (for example, a CommonJS server that imports ESM helpers), use `--import dd-trace/register.js`. The loader hook handles both module systems when registered via `--import`.
+
+## TypeScript ESM
+
+For TypeScript projects compiled to ESM, use the same `--import` approach on the compiled output:
+
+```json package.json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node --import dd-trace/register.js dist/server.js"
+  }
+}
+```
+
+For `ts-node` with ESM:
+
+```bash
+node --import dd-trace/register.js --loader ts-node/esm src/server.ts
+```
+
+## Verifying ESM instrumentation
+
+Enable startup logs to confirm the loader hook was registered:
+
+```bash
+DD_TRACE_STARTUP_LOGS=true node --import dd-trace/register.js server.mjs
+```
+
+Enable debug logging to see which ESM modules are being intercepted:
+
+```bash
+DD_TRACE_DEBUG=true node --import dd-trace/register.js server.mjs
+```
+
+## Known limitations
+
+- Some packages are excluded from ESM instrumentation by default: `import-in-the-middle`, `langsmith`, certain OpenAI internal shims, and Anthropic SDK shims.
+- Packages that use private class fields or other features incompatible with module wrapping may not be instrumentable via ESM hooks.
+- For bundled ESM output, see the [Bundling guide](/installation/bundling).

@@ -1,0 +1,226 @@
+---
+title: "Install dd-trace"
+description: "Install and initialize the dd-trace Node.js APM library in your application."
+---
+
+## Install the package
+
+<CodeGroup>
+
+```bash npm
+npm install dd-trace
+```
+
+```bash yarn
+yarn add dd-trace
+```
+
+```bash pnpm
+pnpm add dd-trace
+```
+
+</CodeGroup>
+
+## Critical: initialize before all other imports
+
+<Warning>
+The tracer **must be initialized before any other `require` calls**. If libraries such as `express`, `pg`, or `http` are loaded before `dd-trace`, they will not be instrumented and their spans will not appear in traces.
+</Warning>
+
+The recommended pattern is to create a dedicated initialization file and require it first.
+
+## CommonJS
+
+### Dedicated initialization file
+
+Create `instrument.js`:
+
+```javascript instrument.js
+'use strict'
+
+require('dd-trace').init()
+```
+
+Then require it at the very top of your application entry point:
+
+```javascript app.js
+require('./instrument') // must be the first require
+
+const express = require('express')
+// ... rest of your app
+```
+
+### Using NODE_OPTIONS
+
+Using the `NODE_OPTIONS` environment variable is the safest approach because it guarantees the tracer is loaded before any user code, regardless of how Node.js is invoked:
+
+```bash
+NODE_OPTIONS='-r dd-trace/init' node app.js
+```
+
+This uses the built-in `dd-trace/init` entry point which calls `init()` with no arguments. Provide configuration via environment variables:
+
+```bash
+DD_SERVICE=my-api \
+DD_ENV=production \
+DD_VERSION=2.0.0 \
+NODE_OPTIONS='-r dd-trace/init' \
+node app.js
+```
+
+### Configuring init() options
+
+Pass configuration as an object to `init()`:
+
+```javascript instrument.js
+'use strict'
+
+require('dd-trace').init({
+  service: 'my-api',
+  env: 'production',
+  version: '2.0.0',
+  hostname: 'localhost',
+  port: 8126,
+  logInjection: true,
+  runtimeMetrics: true,
+})
+```
+
+See [Configuration Options](/configuration/options) for the full list of options.
+
+## TypeScript
+
+For TypeScript projects, import and initialize the tracer before any other imports. Use a separate file and import it first:
+
+```typescript instrument.ts
+import tracer from 'dd-trace'
+
+tracer.init({
+  service: 'my-api',
+  env: 'production',
+})
+
+export default tracer
+```
+
+In your application entry point:
+
+```typescript app.ts
+import './instrument' // must be the first import
+
+import express from 'express'
+
+const app = express()
+// ...
+```
+
+<Warning>
+With TypeScript `import` statements, the order of imports is not always guaranteed by the module bundler. If you observe missing instrumentation, use `NODE_OPTIONS='-r ts-node/register -r ./instrument'` or compile TypeScript and use `-r ./instrument.js`.
+</Warning>
+
+### NodeNext + esModuleInterop compatibility
+
+For projects with `moduleResolution: "NodeNext"` and `esModuleInterop: false`:
+
+```typescript
+import tracer = require('dd-trace')
+tracer.init()
+```
+
+Alternatively, use the named export:
+
+```typescript
+import { tracer } from 'dd-trace'
+tracer.init()
+```
+
+## Verifying the installation
+
+### Startup logs
+
+Set `DD_TRACE_STARTUP_LOGS=true` to print tracer configuration at startup:
+
+```bash
+DD_TRACE_STARTUP_LOGS=true node app.js
+```
+
+A successful startup prints:
+
+```
+DATADOG TRACER CONFIGURATION - {"date":"...","os":"Linux","arch":"x64","version":"5.x.x",...}
+```
+
+### Debug logs
+
+Set `DD_TRACE_DEBUG=true` to see all spans and communication with the Agent:
+
+```bash
+DD_TRACE_DEBUG=true node app.js
+```
+
+## Configuring the Agent connection
+
+By default, the tracer connects to a Datadog Agent at `localhost:8126`. Override this with environment variables:
+
+```bash
+# Different host
+DD_AGENT_HOST=my-agent-host node app.js
+
+# Different port
+DD_TRACE_AGENT_PORT=8126 node app.js
+
+# Full URL (takes priority over host/port)
+DD_TRACE_AGENT_URL=http://my-agent-host:8126 node app.js
+```
+
+Or programmatically:
+
+```javascript
+require('dd-trace').init({
+  hostname: 'my-agent-host',
+  port: 8126,
+  // or
+  url: 'http://my-agent-host:8126',
+})
+```
+
+## Plugin configuration
+
+All built-in plugins are enabled by default. Configure a specific plugin using `tracer.use()`:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+// Configure a single integration
+tracer.use('pg', {
+  service: 'postgres-cluster',
+})
+
+// Disable a plugin
+tracer.use('fs', false)
+```
+
+Or pass plugin configuration directly to `init()`:
+
+```javascript
+require('dd-trace').init({
+  plugins: true, // enable all built-in plugins (default)
+})
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="ESM support" icon="file-code" href="/installation/esm">
+    Using dd-trace with ES modules and the --import flag.
+  </Card>
+  <Card title="Configuration options" icon="sliders" href="/configuration/options">
+    Full init() options reference with types and defaults.
+  </Card>
+  <Card title="Bundling" icon="box" href="/installation/bundling">
+    Using dd-trace with esbuild or webpack.
+  </Card>
+  <Card title="Serverless" icon="cloud" href="/installation/serverless">
+    AWS Lambda and Azure Functions setup.
+  </Card>
+</CardGroup>

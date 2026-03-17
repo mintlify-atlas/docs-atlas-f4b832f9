@@ -1,0 +1,179 @@
+---
+title: "Database integrations"
+description: "Automatic tracing for PostgreSQL, MySQL, MongoDB, Redis, Elasticsearch, and other databases."
+---
+
+dd-trace instruments database drivers to produce spans for every query or command. Each span includes the database type, host, port, and the sanitized query or command.
+
+## Supported databases
+
+<CardGroup cols={3}>
+  <Card title="PostgreSQL" icon="database">`pg`</Card>
+  <Card title="MySQL" icon="database">`mysql` / `mysql2`</Card>
+  <Card title="MariaDB" icon="database">`mariadb`</Card>
+  <Card title="MongoDB" icon="leaf">`mongodb` / `mongoose`</Card>
+  <Card title="Redis" icon="bolt">`redis` / `ioredis`</Card>
+  <Card title="Valkey" icon="bolt">`iovalkey`</Card>
+  <Card title="Elasticsearch" icon="magnifying-glass">`elasticsearch` / `@elastic/elasticsearch`</Card>
+  <Card title="OpenSearch" icon="magnifying-glass">`@opensearch-project/opensearch`</Card>
+  <Card title="Cassandra" icon="database">`cassandra-driver`</Card>
+  <Card title="CouchBase" icon="database">`couchbase`</Card>
+  <Card title="Memcached" icon="memory">`memcached`</Card>
+  <Card title="OracleDB" icon="database">`oracledb`</Card>
+  <Card title="SQL Server" icon="database">`tedious`</Card>
+  <Card title="Prisma" icon="layer-group">`@prisma/client`</Card>
+  <Card title="Knex" icon="layer-group">`knex`</Card>
+  <Card title="Aerospike" icon="database">`aerospike`</Card>
+</CardGroup>
+
+## Common configuration options
+
+All database plugins extend the `Instrumentation` interface and accept:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Enable the plugin. |
+| `service` | `string \| (params) => string` | — | Override the service name. Pass a function to derive the name from connection parameters. |
+| `measured` | `boolean` | — | Whether to measure the span for metrics. |
+
+## PostgreSQL (`pg`)
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('pg', {
+  // Fixed service name
+  service: 'pg-primary',
+  // Or derive from connection params
+  // service: (params) => `pg-${params.database}`,
+
+  // Database Monitoring propagation mode
+  dbmPropagationMode: 'full',
+
+  // Append rather than prepend the SQL comment
+  appendComment: true
+})
+```
+
+`dbmPropagationMode` correlates APM traces with Database Monitoring query samples. Valid values are `'disabled'` (default), `'service'`, and `'full'`.
+
+## MySQL and MySQL2
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('mysql', {
+  service: (params) => `mysql-${params.database}`
+})
+
+tracer.use('mysql2', {
+  service: 'mysql2-primary'
+})
+```
+
+`mariadb` uses the same configuration interface as `mysql`.
+
+## MongoDB
+
+The `mongodb-core` plugin instruments both the low-level `mongodb-core` driver and the `mongodb` package directly. The `mongoose` plugin provides additional Mongoose-specific spans.
+
+```javascript
+tracer.use('mongodb-core', {
+  service: 'mongodb',
+  // Include query in resource name for easier identification
+  queryInResourceName: true
+})
+```
+
+## Redis
+
+<Tabs>
+  <Tab title="redis">
+    ```javascript
+    tracer.use('redis', {
+      service: 'redis-cache',
+      // Only instrument specific commands
+      allowlist: ['get', 'set', 'del'],
+      // Or exclude noisy commands
+      blocklist: ['info', 'ping']
+    })
+    ```
+  </Tab>
+  <Tab title="ioredis">
+    ```javascript
+    tracer.use('ioredis', {
+      service: 'ioredis-cache',
+      allowlist: ['get', 'set', 'hgetall'],
+      // Use per-instance service names
+      splitByInstance: true
+    })
+    ```
+  </Tab>
+  <Tab title="iovalkey">
+    ```javascript
+    tracer.use('iovalkey', {
+      service: 'valkey-cache',
+      splitByInstance: true
+    })
+    ```
+  </Tab>
+</Tabs>
+
+For Redis-family plugins, `allowlist` and `blocklist` filter by **command name** (lowercase), not by URL.
+
+## Elasticsearch and OpenSearch
+
+```javascript
+tracer.use('elasticsearch', {
+  service: 'elasticsearch',
+  hooks: {
+    query: (span, params) => {
+      // params.method, params.path, params.body are available
+      span.setTag('es.index', params.path.split('/')[1])
+    }
+  }
+})
+
+// opensearch uses the same interface as elasticsearch
+tracer.use('opensearch', {
+  service: 'opensearch'
+})
+```
+
+## OracleDB
+
+```javascript
+tracer.use('oracledb', {
+  service: (params) => `oracle-${params.connectString}`
+})
+```
+
+## Prisma
+
+```javascript
+tracer.use('prisma', {
+  // Configure client and engine instrumentation independently
+  client: { service: 'prisma-client' },
+  engine: true
+})
+```
+
+## Database Monitoring (DBM) integration
+
+To correlate APM traces with Database Monitoring query samples, set `dbmPropagationMode` at the tracer level or per-plugin:
+
+```javascript
+const tracer = require('dd-trace').init({
+  // Apply to all database plugins
+  dbmPropagationMode: 'full'
+})
+
+// Or per plugin
+tracer.use('pg', { dbmPropagationMode: 'full' })
+```
+
+| Mode | Description |
+|---|---|
+| `'disabled'` | No SQL comment injected (default). |
+| `'service'` | Injects service name only. |
+| `'full'` | Injects full trace context including trace and span IDs. |

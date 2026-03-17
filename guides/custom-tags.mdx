@@ -1,0 +1,171 @@
+---
+title: "Custom Tags & Metadata"
+description: "How to add custom tags and metadata to spans using dd-trace, including span-level tags, bulk tags, and global tags."
+---
+
+Tags are key-value pairs attached to spans. They let you filter, group, and search traces in the Datadog UI. This guide covers how to add tags at the span level, in bulk, and globally across all spans.
+
+## Adding tags to a span
+
+Use `span.setTag(key, value)` to add a single tag to a span:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.trace('web.request', (span) => {
+  span.setTag('customer.id', '42')
+  span.setTag('request.region', 'us-east-1')
+  span.setTag('feature.flag', 'new-checkout')
+
+  // ... your code
+})
+```
+
+Tag values must be strings or numbers. Nested objects are not supported — serialize complex values manually.
+
+## Adding multiple tags at once
+
+Use `span.addTags(object)` to set multiple tags in a single call:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.trace('order.process', (span) => {
+  span.addTags({
+     'order.id': order.id,
+     'order.total': order.total.toString(),
+     'order.currency': order.currency,
+     'customer.tier': customer.tier
+  })
+
+  // ... your code
+})
+```
+
+## Tagging spans from integrations
+
+For spans created automatically by integrations, use span hooks to add custom tags without modifying the integration:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('express', {
+  hooks: {
+    request: (span, req, res) => {
+      // Add tags to every Express request span
+      span.setTag('customer.id', req.query.customerId)
+      span.setTag('request.version', req.headers['x-api-version'])
+    }
+  }
+})
+```
+
+Span hooks are currently supported for web framework integrations.
+
+## Tagging the active span
+
+When you need to tag a span created by an integration (e.g., inside a route handler), access it from the current scope:
+
+```javascript
+const tracer = require('dd-trace').init()
+const express = require('express')
+const app = express()
+
+app.get('/users/:id', (req, res) => {
+  const span = tracer.scope().active()
+
+  if (span) {
+    span.setTag('user.id', req.params.id)
+    span.setTag('user.role', req.user?.role)
+  }
+
+  // ... handle request
+})
+```
+
+## Global tags
+
+Global tags are applied to every span produced by the tracer. Use them for environment-level metadata like `service`, `env`, and `version`.
+
+<Tabs>
+  <Tab title="Environment variables">
+    The most common approach for Datadog unified service tagging:
+
+    ```bash
+    DD_SERVICE=my-api \
+    DD_ENV=production \
+    DD_VERSION=1.4.2 \
+    node app.js
+    ```
+
+    Add arbitrary tags with `DD_TAGS` (comma-separated `key:value` pairs):
+
+    ```bash
+    DD_TAGS=region:us-east-1,team:platform node app.js
+    ```
+  </Tab>
+  <Tab title="Programmatic">
+    Pass global tags in the `tracer.init()` call:
+
+    ```javascript
+    const tracer = require('dd-trace').init({
+      service: 'my-api',
+      env: 'production',
+      version: '1.4.2',
+      tags: {
+        region: 'us-east-1',
+        team: 'platform'
+      }
+    })
+    ```
+  </Tab>
+</Tabs>
+
+## Service, env, and version tags
+
+These three tags are the foundation of Datadog unified service tagging. Set them consistently across your services to enable filtering in APM, logs, and infrastructure views.
+
+| Tag       | Environment variable | Init option | Description                                    |
+| --------- | -------------------- | ----------- | ---------------------------------------------- |
+| `service` | `DD_SERVICE`         | `service`   | Name of your service. Inferred from `package.json` if not set. |
+| `env`     | `DD_ENV`             | `env`       | Deployment environment (e.g., `production`, `staging`). |
+| `version` | `DD_VERSION`         | `version`   | Application version. Inferred from `package.json` if not set. |
+
+## Resource naming
+
+The resource name identifies the specific operation within a span. For web requests this is usually the route pattern. Set it using `tracer.trace` options or by tagging the span directly:
+
+```javascript
+tracer.trace(
+  'db.query',
+  {
+    resource: 'SELECT users WHERE id = ?',
+    service: 'users-db',
+    type: 'sql'
+  },
+  (span) => {
+    // execute query
+  }
+)
+```
+
+## Tag naming best practices
+
+- Use dot-separated namespaces to group related tags: `user.id`, `user.role`, `order.id`, `order.status`.
+- Use lowercase letters, digits, underscores, and dots. Avoid spaces and special characters.
+- Keep tag values concise and low-cardinality when possible (e.g., avoid using raw SQL or full URLs as tag values).
+- Reserve high-cardinality identifiers (UUIDs, user IDs, order IDs) for tags that you specifically need to filter by — high cardinality can increase costs.
+- Follow the [Datadog tagging documentation](https://docs.datadoghq.com/tagging/) for reserved tag names and naming conventions.
+
+<Note>
+  Nested objects as tag values are not supported. When adding an object as a tag value, only its direct (own) properties are included. If you need nested properties, add them individually:
+
+  ```javascript
+  // Correct
+  span.setTag('user.id', obj.user.id)
+  span.setTag('user.role', obj.user.role)
+
+  // Incorrect — nested properties are not traversed
+  span.setTag('user', obj.user)
+  ```
+</Note>

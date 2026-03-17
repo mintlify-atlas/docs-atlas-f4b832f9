@@ -1,122 +1,137 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "dd-trace: Node.js APM Tracer",
+  "theme": "linden",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7341af",
+    "light": "#baa0d7",
+    "dark": "#e4daef"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/62fa96b0-3c43-49c9-a065-be07d6a0779f.png",
+  "logo": {
+    "dark": "https://media.brand.dev/62fa96b0-3c43-49c9-a065-be07d6a0779f.png",
+    "light": "https://media.brand.dev/62fa96b0-3c43-49c9-a065-be07d6a0779f.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/datadog/dd-trace-js"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/datadog/dd-trace-js"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Getting Started",
         "groups": [
           {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
+            "group": "Introduction",
+            "pages": ["introduction", "quickstart"]
           },
           {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
+            "group": "Installation",
+            "pages": ["installation/nodejs", "installation/esm", "installation/bundling", "installation/serverless"]
           },
           {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
+            "group": "Configuration",
+            "pages": ["configuration/options", "configuration/environment-variables", "configuration/sampling"]
+          }
+        ]
+      },
+      {
+        "tab": "Instrumentation",
+        "groups": [
+          {
+            "group": "Automatic Instrumentation",
+            "pages": ["instrumentation/automatic", "instrumentation/plugins-overview"]
           },
           {
-            "group": "AI tools",
+            "group": "Manual Instrumentation",
+            "pages": ["instrumentation/manual/tracing", "instrumentation/manual/spans", "instrumentation/manual/scope"]
+          },
+          {
+            "group": "Integrations",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "integrations/web-frameworks",
+              "integrations/databases",
+              "integrations/messaging",
+              "integrations/ai-ml",
+              "integrations/testing"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Features",
         "groups": [
           {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
+            "group": "Application Security",
+            "pages": ["features/appsec/overview", "features/appsec/iast"]
           },
           {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
+            "group": "Profiling",
+            "pages": ["features/profiling/overview"]
+          },
+          {
+            "group": "LLM Observability",
+            "pages": ["features/llmobs/overview", "features/llmobs/sdk"]
+          },
+          {
+            "group": "CI Visibility",
+            "pages": ["features/ci-visibility/overview"]
+          },
+          {
+            "group": "Dynamic Instrumentation",
+            "pages": ["features/debugger/overview"]
+          },
+          {
+            "group": "Data Streams",
+            "pages": ["features/data-streams/overview"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Tracer API",
+            "pages": ["api/tracer", "api/span", "api/scope", "api/span-context"]
+          },
+          {
+            "group": "OpenTelemetry",
+            "pages": ["api/opentelemetry/tracing", "api/opentelemetry/metrics", "api/opentelemetry/logs"]
+          },
+          {
+            "group": "OpenTracing",
+            "pages": ["api/opentracing"]
+          },
+          {
+            "group": "Additional APIs",
+            "pages": ["api/appsec", "api/llmobs", "api/dogstatsd", "api/data-streams"]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Migration",
+            "pages": ["guides/migrating-v4-to-v5", "guides/migrating-v3-to-v4"]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": ["guides/distributed-tracing", "guides/log-correlation", "guides/custom-tags", "guides/user-identification"]
+          },
+          {
+            "group": "Compatibility",
+            "pages": ["guides/compatibility/nodejs-versions", "guides/compatibility/release-lines"]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

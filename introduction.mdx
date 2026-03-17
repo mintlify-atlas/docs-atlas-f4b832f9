@@ -1,0 +1,99 @@
+---
+title: "Introduction"
+description: "dd-trace is the Datadog APM client library for Node.js. It captures distributed trace data from your application and sends it to the Datadog backend via a local Agent."
+---
+
+## What is dd-trace?
+
+`dd-trace` is an npm package that you install in your Node.js application to capture APM (Application Performance Monitoring) data. In Datadog terminology this library is called a Tracer.
+
+The tracer instruments your application automatically — HTTP servers, database clients, queue consumers, and more — without requiring you to change your application logic. It records spans that describe units of work, assembles them into traces, and sends them to a Datadog Agent running alongside your application.
+
+## Architecture
+
+Data flows through three components before reaching Datadog:
+
+```
+Your App (dd-trace) → Datadog Agent → Datadog Backend
+```
+
+1. **Tracer** (`dd-trace`) — Installed in your Node.js process. Instruments libraries, creates spans, and batches trace data.
+2. **Agent** — A separate process (typically a sidecar or host daemon) that receives trace data from the tracer over localhost and forwards it to Datadog.
+3. **Datadog Backend** — Stores, indexes, and visualizes traces. Provides dashboards, alerting, and service maps.
+
+<Note>
+The Datadog Agent must be running and reachable at `localhost:8126` (the default) for traces to be collected. If the Agent is on a different host, set `DD_AGENT_HOST` accordingly.
+</Note>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Automatic instrumentation" icon="wand-magic-sparkles">
+    Over 100 built-in plugins instrument popular frameworks (Express, Fastify, Hapi, Koa, Next.js), databases (pg, MySQL, MongoDB, Redis), and messaging systems (Kafka, RabbitMQ, SQS) with zero code changes.
+  </Card>
+  <Card title="Distributed tracing" icon="diagram-project">
+    Trace requests as they flow across services and process boundaries. Supports Datadog, W3C TraceContext, B3, and B3 single-header propagation formats.
+  </Card>
+  <Card title="Log injection" icon="file-lines">
+    Automatically inject `trace_id` and `span_id` into log records so that logs can be correlated with the traces that produced them.
+  </Card>
+  <Card title="Runtime metrics" icon="chart-line">
+    Collect Node.js runtime metrics (event loop lag, heap usage, garbage collection) and send them to Datadog as DogStatsD metrics.
+  </Card>
+  <Card title="AppSec protection" icon="shield-halved">
+    Application-layer security monitoring (AppSec) detects and blocks attacks in real time using a built-in WAF.
+  </Card>
+  <Card title="OpenTelemetry compatibility" icon="circle-nodes">
+    Use the OpenTelemetry API with the Datadog tracer as the SDK. Compatible with `@opentelemetry/api` for custom instrumentation.
+  </Card>
+  <Card title="Profiling" icon="microchip">
+    Continuous profiling captures CPU, heap allocation, and wall-time profiles and sends them to Datadog Profiling.
+  </Card>
+  <Card title="LLM Observability" icon="robot">
+    Native support for tracing LLM calls via OpenAI, Anthropic, LangChain, LangGraph, VertexAI, and more.
+  </Card>
+</CardGroup>
+
+## Node.js version compatibility
+
+| Release line | Node.js requirement | Status |
+| :---: | :---: | :---: |
+| `v5` (current) | `>= 18` | **Supported** |
+| `v4` | `>= 16` | EOL (2025-01-11) |
+| `v3` | `>= 14` | EOL (2024-05-15) |
+| `v2` | `>= 12` | EOL (2023-08-15) |
+| `v1` | `>= 12` | EOL (2022-02-25) |
+
+`v5` is the current release line. Install it with:
+
+```bash
+npm install dd-trace
+```
+
+For applications still running on EOL Node.js versions, install the matching older release line:
+
+```bash
+npm install dd-trace@4  # Node.js 16
+npm install dd-trace@3  # Node.js 14
+```
+
+<Warning>
+EOL release lines no longer receive updates. Upgrade Node.js and `dd-trace` to a supported version as soon as possible.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install dd-trace and send your first trace in under five minutes.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation/nodejs">
+    Detailed installation guide including TypeScript, ESM, and serverless setups.
+  </Card>
+  <Card title="Configuration options" icon="sliders" href="/configuration/options">
+    Full reference for all `init()` options and their environment variable equivalents.
+  </Card>
+  <Card title="Environment variables" icon="terminal" href="/configuration/environment-variables">
+    All `DD_*` environment variables grouped by category.
+  </Card>
+</CardGroup>

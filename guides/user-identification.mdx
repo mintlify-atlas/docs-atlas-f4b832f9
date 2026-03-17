@@ -1,0 +1,162 @@
+---
+title: "User Identification"
+description: "How to link authenticated users to traces using tracer.setUser(), including integration with AppSec."
+---
+
+dd-trace provides a `tracer.setUser()` method that links an authenticated user to the current trace. This lets you filter and search traces by user in the Datadog APM UI and enables user-based blocking with AppSec.
+
+## Basic usage
+
+Call `tracer.setUser()` with a user object after a user is authenticated. The `id` field is the only required property.
+
+```javascript
+const tracer = require('dd-trace').init()
+
+function handleRequest(req, res) {
+  tracer.setUser({
+    id: '123456789' // Required: unique identifier of the user
+  })
+
+  // ... handle request
+}
+```
+
+## Full user object
+
+The user object accepts the following standard fields in addition to `id`:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+function handleRequest(req, res) {
+  tracer.setUser({
+    id: '123456789',              // *Required* Unique identifier of the user
+    email: 'jane.doe@example.com', // Email of the user
+    name: 'Jane Doe',             // User-friendly name of the user
+    session_id: '987654321',      // Session ID of the user
+    role: 'admin',                // Role the user is making the request under
+    scope: 'read:message, write:files' // Scopes or granted authorizations
+  })
+}
+```
+
+## User field reference
+
+| Field        | Type   | Required | Description                                              |
+| ------------ | ------ | -------- | -------------------------------------------------------- |
+| `id`         | string | Yes      | Unique identifier of the user.                           |
+| `email`      | string | No       | Email address of the user.                               |
+| `name`       | string | No       | Human-readable name of the user.                         |
+| `session_id` | string | No       | Session ID associated with the user.                     |
+| `role`       | string | No       | Role the user is acting under for this request.          |
+| `scope`      | string | No       | OAuth2 scopes or SAML granted authorizations.            |
+
+## Custom fields
+
+Arbitrary string fields can be added to the user object to attach custom metadata:
+
+```javascript
+tracer.setUser({
+  id: '123456789',
+  email: 'jane.doe@example.com',
+  name: 'Jane Doe',
+
+  // Arbitrary custom fields
+  custom_tag: 'custom data',
+  tenant_id: 'acme-corp',
+  subscription_plan: 'enterprise'
+})
+```
+
+All custom field values must be strings.
+
+## Integration with AppSec
+
+When [AppSec](https://docs.datadoghq.com/security/application_security/) is enabled, calling `tracer.setUser()` makes the user identity available to the AppSec engine. This enables:
+
+- **User blocking**: AppSec can block requests from specific user IDs based on configured rules or remote configuration.
+- **User tracking**: Suspicious activity is attributed to specific users in the Security Signals view.
+
+Enable AppSec alongside user identification:
+
+```javascript
+const tracer = require('dd-trace').init({
+  appsec: {
+    enabled: true
+  }
+})
+
+app.post('/login', async (req, res) => {
+  const user = await authenticate(req.body)
+
+  if (user) {
+    tracer.setUser({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role
+    })
+  }
+
+  res.json({ success: !!user })
+})
+```
+
+## Express middleware example
+
+A common pattern is to call `tracer.setUser()` in an authentication middleware so every subsequent span in the request lifecycle is tagged with the user:
+
+```javascript
+const tracer = require('dd-trace').init()
+const express = require('express')
+const app = express()
+
+// Authentication middleware
+async function authenticate(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+
+  const user = await verifyToken(token)
+  if (!user) return res.status(401).json({ error: 'Invalid token' })
+
+  // Link user to the current trace
+  tracer.setUser({
+    id: user.id,
+    email: user.email,
+    name: user.displayName,
+    session_id: user.sessionId,
+    role: user.role
+  })
+
+  req.user = user
+  next()
+}
+
+app.get('/api/profile', authenticate, (req, res) => {
+  res.json({ user: req.user })
+})
+
+app.listen(3000)
+```
+
+<Warning>
+  `tracer.setUser()` must be called within an active span context (i.e., during a request being traced). Calling it outside of any span context has no effect.
+</Warning>
+
+## TypeScript usage
+
+The `User` interface is exported from dd-trace types:
+
+```typescript
+import tracer from 'dd-trace'
+
+tracer.init()
+
+function setCurrentUser(user: { id: string; email: string; role: string }) {
+  tracer.setUser({
+    id: user.id,
+    email: user.email,
+    role: user.role
+  })
+}
+```

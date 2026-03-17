@@ -1,0 +1,123 @@
+---
+title: "Dynamic Instrumentation"
+description: "Add log probes and metric probes to your running Node.js application without redeploying using Datadog Dynamic Instrumentation."
+---
+
+Datadog Dynamic Instrumentation (also called Live Debugging) lets you add instrumentation — log probes, metric probes, and span probes — to specific lines of code in your running Node.js application. You do not need to modify source code or redeploy the application.
+
+## How it works
+
+When Dynamic Instrumentation is enabled, dd-trace starts a dedicated worker thread that connects to the V8 Debugger Protocol (DevTools) inside the Node.js process. The Datadog Agent delivers probe configurations to this worker thread via Remote Configuration. When a configured code location is hit, the worker captures local variable values, call stack information, or metrics and reports them back to Datadog.
+
+<Note>
+  Dynamic Instrumentation requires the Datadog Agent with Remote Configuration enabled. The Agent acts as the relay between the Datadog backend (where you manage probes) and the instrumented application.
+</Note>
+
+## Enabling Dynamic Instrumentation
+
+<Steps>
+  <Step title="Enable Remote Configuration on the Agent">
+    Dynamic Instrumentation uses Remote Configuration to deliver probe definitions from the Datadog UI to the Agent and then to your application. Ensure your Agent version supports Remote Configuration (Agent 7.41.0+).
+  </Step>
+  <Step title="Set the environment variable">
+    ```bash
+    DD_DYNAMIC_INSTRUMENTATION_ENABLED=true node server.js
+    ```
+  </Step>
+  <Step title="Or enable programmatically">
+    ```javascript
+    const tracer = require('dd-trace').init({
+      dynamicInstrumentation: {
+        enabled: true,
+      },
+    })
+    ```
+  </Step>
+  <Step title="Add probes in the Datadog UI">
+    Navigate to **APM > Dynamic Instrumentation** in Datadog. Select a service and version, browse to a source file, and click on a line number to add a probe.
+  </Step>
+</Steps>
+
+## Probe types
+
+### Log probes
+
+Log probes capture a snapshot of local variables and the call stack at a specific line of code and emit a log message to Datadog Logs. They are the most common probe type for debugging.
+
+Example probe configuration (set via the Datadog UI):
+- **File:** `src/handlers/payment.js`
+- **Line:** 47
+- **Message:** `Processing payment for order {{orderId}} with amount {{amount}}`
+- **Capture:** `orderId`, `amount`, `user`
+
+### Metric probes
+
+Metric probes increment a custom metric every time a specific line of code is executed. You can also use an expression to track a variable value as a gauge or histogram.
+
+### Span probes
+
+Span probes create a new APM span every time a specific code location is reached. Useful for adding observability to code paths that are not already instrumented.
+
+## Configuration options
+
+| Option | Environment variable | Default | Description |
+|---|---|---|---|
+| `enabled` | `DD_DYNAMIC_INSTRUMENTATION_ENABLED` | `false` | Enable Dynamic Instrumentation |
+| `captureTimeoutMs` | `DD_DYNAMIC_INSTRUMENTATION_CAPTURE_TIMEOUT_MS` | `15` | Timeout in milliseconds for capturing variable values |
+| `uploadIntervalSeconds` | `DD_DYNAMIC_INSTRUMENTATION_UPLOAD_INTERVAL_SECONDS` | `1` | Interval in seconds between uploads of probe data |
+| `redactedIdentifiers` | `DD_DYNAMIC_INSTRUMENTATION_REDACTED_IDENTIFIERS` | `[]` | Additional identifier names to redact in captured data |
+| `redactionExcludedIdentifiers` | `DD_DYNAMIC_INSTRUMENTATION_REDACTION_EXCLUDED_IDENTIFIERS` | `[]` | Identifiers to exclude from the built-in redaction list |
+| `probeFile` | `DD_DYNAMIC_INSTRUMENTATION_PROBE_FILE` | — | Path to a local JSON file containing probe definitions |
+
+## Data redaction
+
+Dynamic Instrumentation has a built-in list of identifier names that are automatically redacted in captured snapshots (passwords, tokens, secrets, credit card numbers, etc.). You can extend this list:
+
+```javascript
+tracer.init({
+  dynamicInstrumentation: {
+    enabled: true,
+    redactedIdentifiers: ['my_internal_token', 'customer_ssn'],
+  },
+})
+```
+
+To allow specific built-in identifiers to be captured (override the default redaction list):
+
+```javascript
+tracer.init({
+  dynamicInstrumentation: {
+    enabled: true,
+    redactionExcludedIdentifiers: ['auth_token'], // allow this to be captured
+  },
+})
+```
+
+## Local probe files
+
+For environments where Remote Configuration is not available (for example, local development), you can load probes from a JSON file:
+
+```bash
+DD_DYNAMIC_INSTRUMENTATION_ENABLED=true \
+DD_DYNAMIC_INSTRUMENTATION_PROBE_FILE=./probes.json \
+node server.js
+```
+
+The file must contain a JSON array of probe definition objects in the same format used by the Remote Configuration API.
+
+## Security considerations
+
+Dynamic Instrumentation captures values of local variables at probe locations. To prevent sensitive data from being exfiltrated:
+
+- The built-in redaction list covers common sensitive field names.
+- Use `redactedIdentifiers` to add application-specific sensitive fields.
+- Probes are only deliverable to services you own in your Datadog organisation.
+- Remote Configuration requires Agent authentication; probe delivery is cryptographically verified.
+
+<Warning>
+  Do not configure probes on lines that handle raw credential values, unmasked payment card data, or other highly sensitive information unless you have confirmed that redaction covers all relevant variable names.
+</Warning>
+
+## Architecture
+
+Dynamic Instrumentation runs in a dedicated worker thread (`dd-debugger`) inside the Node.js process. The worker thread communicates with the parent thread via `MessageChannel` and connects to the V8 inspector via the DevTools protocol. This design keeps the instrumentation code isolated from the application event loop and limits performance impact on the main thread.

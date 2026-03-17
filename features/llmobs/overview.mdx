@@ -1,0 +1,108 @@
+---
+title: "LLM Observability Overview"
+description: "Monitor, debug, and evaluate your LLM-powered applications with Datadog LLM Observability."
+---
+
+Datadog LLM Observability (LLMObs) captures detailed telemetry from your AI and LLM applications — inputs, outputs, token usage, latency, and errors — and displays them in the Datadog LLM Observability product. You can evaluate quality, debug regressions, and monitor production LLM behaviour across chains, agents, and individual model calls.
+
+## What LLMObs tracks
+
+<CardGroup cols={2}>
+  <Card title="Spans and traces" icon="layers">
+    Every LLM call, embedding request, retrieval, tool call, and agent step is captured as a span. Spans are nested into traces that represent an entire agent run or user interaction.
+  </Card>
+  <Card title="Inputs and outputs" icon="arrow-right-left">
+    Prompts, messages, completions, retrieved documents, and tool arguments are captured on each span.
+  </Card>
+  <Card title="Token usage" icon="coins">
+    Input tokens, output tokens, and total token counts are recorded as metrics on each LLM span.
+  </Card>
+  <Card title="Evaluation metrics" icon="star">
+    Submit custom evaluation metrics (categorical, score, boolean, or JSON) to score LLM responses on quality, relevance, or safety.
+  </Card>
+</CardGroup>
+
+## Enabling LLM Observability
+
+<Steps>
+  <Step title="Set required environment variables">
+    ```bash
+    DD_LLMOBS_ENABLED=true \
+    DD_LLMOBS_ML_APP=my-llm-app \
+    node server.js
+    ```
+
+    `DD_LLMOBS_ML_APP` is the name of your ML application. It groups all LLMObs data together in the Datadog UI.
+  </Step>
+  <Step title="Or enable programmatically">
+    ```javascript
+    const tracer = require('dd-trace').init({
+      llmobs: {
+        mlApp: 'my-llm-app',
+      },
+    })
+    ```
+
+    Or call `tracer.llmobs.enable()` at any point during initialisation:
+
+    ```javascript
+    const tracer = require('dd-trace').init()
+
+    tracer.llmobs.enable({
+      mlApp: 'my-llm-app',
+    })
+    ```
+  </Step>
+  <Step title="(Optional) Enable agentless mode">
+    If you are not running a Datadog Agent (for example, in a serverless environment), enable agentless mode and provide a Datadog API key:
+
+    ```bash
+    DD_LLMOBS_ENABLED=true \
+    DD_LLMOBS_ML_APP=my-llm-app \
+    DD_LLMOBS_AGENTLESS_ENABLED=true \
+    DD_API_KEY=<your-api-key> \
+    DD_SITE=datadoghq.com \
+    node server.js
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  The `DD_LLMOBS_ENABLED` environment variable takes precedence over programmatic configuration. If the variable is set to `false`, calling `tracer.llmobs.enable()` has no effect.
+</Note>
+
+## Automatic instrumentation
+
+With LLMObs enabled, dd-trace automatically instruments the following AI libraries and creates LLMObs spans without any code changes:
+
+| Library | Span kind |
+|---|---|
+| `openai` | `llm`, `embedding` |
+| `@anthropic-ai/sdk` | `llm` |
+| `langchain` | `llm`, `embedding`, `retrieval`, `tool`, `chain` |
+| `@langchain/langgraph` | `agent`, `workflow` |
+| `@google-cloud/vertexai` | `llm`, `embedding` |
+| `@google/generative-ai` | `llm`, `embedding` |
+| `ai` (Vercel AI SDK) | `llm`, `embedding` |
+
+## Span kinds
+
+LLMObs uses a hierarchy of span kinds that map to different components of an AI system:
+
+| Span kind | Purpose |
+|---|---|
+| `llm` | A call to a large language model. Records messages, token usage, and model name/provider. |
+| `embedding` | A call to a text embedding model. Records input text and embedding model details. |
+| `retrieval` | A document retrieval step (e.g., vector database lookup). Records the retrieved documents. |
+| `tool` | An external tool or function called by an agent. Records inputs and outputs. |
+| `task` | A generic processing step that is part of a larger workflow. |
+| `agent` | The top-level orchestrating agent in an agentic system. |
+| `workflow` | A multi-step pipeline or chain that contains other spans. |
+
+## Distributed tracing
+
+LLMObs integrates with dd-trace distributed tracing. When an LLM request spans multiple services, LLMObs spans are correlated with APM traces so you can see the full picture — from the HTTP request that triggered an agent run down to each individual LLM call.
+
+## Next steps
+
+- [LLM Observability SDK](/features/llmobs/sdk) — manually instrument LLM calls and annotate spans

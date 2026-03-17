@@ -1,0 +1,154 @@
+---
+title: "Supported Plugins"
+description: "Complete list of all dd-trace plugins organized by category."
+---
+
+dd-trace ships with plugins for 100+ popular Node.js libraries. Every plugin is enabled by default and activates automatically when you require the corresponding package. See [Automatic Instrumentation](/instrumentation/automatic) for configuration details.
+
+<AccordionGroup>
+
+  <Accordion title="Web frameworks">
+    | Plugin name | npm package |
+    |---|---|
+    | `connect` | `connect` |
+    | `express` | `express` |
+    | `fastify` | `fastify` |
+    | `find-my-way` | `find-my-way` |
+    | `hapi` | `@hapi/hapi` |
+    | `hono` | `hono` |
+    | `koa` | `koa`, `@koa/router`, `koa-router` |
+    | `microgateway-core` | `microgateway-core` |
+    | `moleculer` | `moleculer` |
+    | `next` | `next` |
+    | `restify` | `restify` |
+    | `router` | `router` |
+  </Accordion>
+
+  <Accordion title="HTTP clients">
+    | Plugin name | npm package |
+    |---|---|
+    | `fetch` | `fetch` (global) |
+    | `http` | Node.js `http` / `https` / `node:http` / `node:https` |
+    | `http2` | Node.js `http2` / `node:http2` |
+    | `undici` | `undici` |
+  </Accordion>
+
+  <Accordion title="Databases — relational">
+    | Plugin name | npm package |
+    |---|---|
+    | `knex` | `knex` |
+    | `mariadb` | `mariadb` |
+    | `mysql` | `mysql` |
+    | `mysql2` | `mysql2` |
+    | `oracledb` | `oracledb` |
+    | `pg` | `pg` |
+    | `prisma` | `@prisma/client` |
+    | `sequelize` | via `knex` / dialect plugins |
+    | `tedious` | `tedious` (SQL Server) |
+  </Accordion>
+
+  <Accordion title="Databases — NoSQL & cache">
+    | Plugin name | npm package |
+    |---|---|
+    | `aerospike` | `aerospike` |
+    | `cassandra-driver` | `cassandra-driver` |
+    | `couchbase` | `couchbase` |
+    | `elasticsearch` | `elasticsearch`, `@elastic/elasticsearch`, `@elastic/transport` |
+    | `ioredis` | `ioredis` |
+    | `iovalkey` | `iovalkey` |
+    | `memcached` | `memcached` |
+    | `mongodb-core` | `mongodb`, `mongodb-core` |
+    | `mongoose` | `mongoose` |
+    | `opensearch` | `@opensearch-project/opensearch` |
+    | `redis` | `redis`, `@node-redis/client`, `@redis/client` |
+  </Accordion>
+
+  <Accordion title="Message queues & streaming">
+    | Plugin name | npm package |
+    |---|---|
+    | `amqp10` | `amqp10` |
+    | `amqplib` | `amqplib` |
+    | `aws-sdk` | `aws-sdk`, `@aws-sdk/smithy-client`, `@smithy/smithy-client` |
+    | `azure-event-hubs` | `@azure/event-hubs` |
+    | `azure-service-bus` | `@azure/service-bus` |
+    | `bullmq` | `bullmq` |
+    | `confluentinc-kafka-javascript` | `@confluentinc/kafka-javascript` |
+    | `google-cloud-pubsub` | `@google-cloud/pubsub` |
+    | `kafkajs` | `kafkajs` |
+    | `rhea` | `rhea` |
+  </Accordion>
+
+  <Accordion title="AI / ML">
+    | Plugin name | npm package |
+    |---|---|
+    | `ai` | Vercel AI SDK (`ai`) |
+    | `anthropic` | `@anthropic-ai/sdk` |
+    | `google-cloud-vertexai` | `@google-cloud/vertexai` |
+    | `google-genai` | `@google/genai` |
+    | `langchain` | `langchain`, `@langchain/core`, `@langchain/openai` |
+    | `langgraph` | `@langchain/langgraph` |
+    | `openai` | `openai` |
+  </Accordion>
+
+  <Accordion title="Testing frameworks">
+    | Plugin name | npm package |
+    |---|---|
+    | `cucumber` | `@cucumber/cucumber` |
+    | `cypress` | `cypress` |
+    | `jest` | `jest-circus`, `jest-runtime`, `jest-worker`, `@jest/core`, and related packages |
+    | `mocha` | `mocha`, `mocha-each` |
+    | `nyc` | `nyc` |
+    | `playwright` | `@playwright/test`, `playwright` |
+    | `selenium` | `selenium-webdriver` |
+    | `vitest` | `vitest`, `@vitest/runner` |
+  </Accordion>
+
+  <Accordion title="Logging">
+    | Plugin name | npm package |
+    |---|---|
+    | `bunyan` | `bunyan` |
+    | `pino` | `pino`, `pino-pretty` |
+    | `winston` | `winston` |
+  </Accordion>
+
+  <Accordion title="GraphQL & RPC">
+    | Plugin name | npm package |
+    |---|---|
+    | `apollo` | `@apollo/gateway` |
+    | `graphql` | `graphql` |
+    | `grpc` | `grpc`, `@grpc/grpc-js` |
+    | `sharedb` | `sharedb` |
+  </Accordion>
+
+  <Accordion title="Schema & serialization">
+    | Plugin name | npm package |
+    |---|---|
+    | `avsc` | `avsc` |
+    | `protobufjs` | `protobufjs` |
+  </Accordion>
+
+  <Accordion title="Cloud & serverless">
+    | Plugin name | npm package |
+    |---|---|
+    | `aws-sdk` | `aws-sdk` v2, `@aws-sdk/smithy-client` v3 |
+    | `azure-durable-functions` | `durable-functions` |
+    | `azure-functions` | `@azure/functions` |
+  </Accordion>
+
+  <Accordion title="Node.js core">
+    | Plugin name | module |
+    |---|---|
+    | `child_process` | `child_process` |
+    | `dns` | `dns`, `node:dns` |
+    | `fs` | `fs` |
+    | `net` | `net`, `node:net` |
+  </Accordion>
+
+  <Accordion title="Utilities">
+    | Plugin name | npm package |
+    |---|---|
+    | `generic-pool` | `generic-pool` |
+    | `ws` | `ws` |
+  </Accordion>
+
+</AccordionGroup>

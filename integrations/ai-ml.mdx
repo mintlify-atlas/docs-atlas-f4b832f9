@@ -1,0 +1,196 @@
+---
+title: "AI/ML integrations"
+description: "Automatic LLM Observability tracing for OpenAI, Anthropic, LangChain, LangGraph, Vertex AI, Google GenAI, and AWS Bedrock."
+---
+
+dd-trace instruments AI/ML SDKs to automatically capture model inputs, outputs, token counts, and latency. These spans feed into [LLM Observability](https://docs.datadoghq.com/llm_observability/) in the Datadog UI.
+
+## Supported integrations
+
+<CardGroup cols={3}>
+  <Card title="OpenAI" icon="robot">`openai`</Card>
+  <Card title="Anthropic" icon="robot">`@anthropic-ai/sdk`</Card>
+  <Card title="LangChain" icon="link">`langchain` / `@langchain/core`</Card>
+  <Card title="LangGraph" icon="diagram-project">`@langchain/langgraph`</Card>
+  <Card title="Vertex AI" icon="google">`@google-cloud/vertexai`</Card>
+  <Card title="Google GenAI" icon="google">`@google/genai`</Card>
+  <Card title="AWS Bedrock" icon="aws">`@aws-sdk/smithy-client`</Card>
+  <Card title="Vercel AI SDK" icon="bolt">`ai`</Card>
+</CardGroup>
+
+## Enabling LLM Observability
+
+LLM Observability is automatically active when the AI plugins are loaded. To send LLM spans to the Datadog LLM Observability product, set the following environment variables:
+
+```bash
+DD_LLMOBS_ENABLED=true
+DD_LLMOBS_ML_APP=my-llm-app
+DD_API_KEY=<your-api-key>
+```
+
+Or configure programmatically:
+
+```javascript
+const tracer = require('dd-trace').init({
+  llmobs: {
+    mlApp: 'my-llm-app'
+  }
+})
+```
+
+<Note>
+  For OpenAI metrics (token usage, request counts) to work, [DogStatsD](https://docs.datadoghq.com/developers/dogstatsd/) must be enabled in the Datadog Agent.
+</Note>
+
+## OpenAI
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('openai', {
+  service: 'openai'
+})
+
+const OpenAI = require('openai')
+const client = new OpenAI()
+
+// Spans are created automatically for completions, embeddings, etc.
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello' }]
+})
+```
+
+The plugin captures:
+- Model name and version
+- Input prompt and completion text
+- Token counts (prompt, completion, total)
+- Request duration and status
+
+<Warning>
+  Prompt and completion content may contain sensitive data. Review your data retention settings in Datadog before enabling content capture in production.
+</Warning>
+
+## Anthropic
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('anthropic', {
+  service: 'anthropic'
+})
+
+const Anthropic = require('@anthropic-ai/sdk')
+const client = new Anthropic()
+
+// Automatically traced
+const message = await client.messages.create({
+  model: 'claude-opus-4-5',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'Hello' }]
+})
+```
+
+## LangChain
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('langchain', {
+  service: 'langchain'
+})
+
+// Works with @langchain/core and @langchain/openai
+const { ChatOpenAI } = require('@langchain/openai')
+const model = new ChatOpenAI({ model: 'gpt-4o' })
+
+// Chain invocations, tool calls, and retriever calls are all traced
+const result = await model.invoke('What is the capital of France?')
+```
+
+## LangGraph
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('langgraph', {
+  service: 'langgraph'
+})
+
+// Graph executions, node transitions, and state updates are traced
+const { StateGraph } = require('@langchain/langgraph')
+```
+
+## Google Cloud Vertex AI
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('google-cloud-vertexai', {
+  service: 'vertexai'
+})
+
+const { VertexAI } = require('@google-cloud/vertexai')
+const vertexai = new VertexAI({ project: 'my-project', location: 'us-central1' })
+
+// Automatically traced
+const model = vertexai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+const result = await model.generateContent('Hello')
+```
+
+## Google GenAI
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('google-genai', {
+  service: 'google-genai'
+})
+
+const { GoogleGenerativeAI } = require('@google/genai')
+const genai = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY)
+
+// Automatically traced
+const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+const result = await model.generateContent('Hello')
+```
+
+## AWS Bedrock (via aws-sdk)
+
+Bedrock is instrumented through the `aws-sdk` plugin:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('aws-sdk', {
+  service: 'bedrock'
+})
+
+// @aws-sdk/client-bedrock-runtime is automatically traced
+const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime')
+const client = new BedrockRuntimeClient({ region: 'us-east-1' })
+
+const response = await client.send(new InvokeModelCommand({
+  modelId: 'anthropic.claude-opus-4-5',
+  body: JSON.stringify({ prompt: 'Hello', max_tokens_to_sample: 256 })
+}))
+```
+
+## Vercel AI SDK
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('ai', {
+  service: 'vercel-ai'
+})
+
+// Automatically traced when using the `ai` package
+const { generateText } = require('ai')
+const { openai } = require('@ai-sdk/openai')
+
+const { text } = await generateText({
+  model: openai('gpt-4o'),
+  prompt: 'Hello'
+})
+```

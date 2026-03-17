@@ -1,0 +1,363 @@
+---
+title: "Configuration options"
+description: "Full reference for all dd-trace TracerOptions, grouped by category, with types, defaults, and environment variable equivalents."
+---
+
+All options are passed to `tracer.init()`. Environment variables take effect when the programmatic option is not set. Programmatic configuration always takes precedence over environment variables.
+
+```javascript
+const tracer = require('dd-trace').init({
+  service: 'my-api',
+  env: 'production',
+  version: '1.0.0',
+})
+```
+
+## General
+
+<ParamField body="service" type="string">
+  The service name for this application. If not set, dd-trace attempts to infer it from `package.json`. In serverless environments it is inferred from the function name environment variable.
+
+  **Env:** `DD_SERVICE`, `OTEL_SERVICE_NAME`
+</ParamField>
+
+<ParamField body="env" type="string">
+  The environment name (e.g., `prod`, `staging`, `development`). Appears as the `env` tag on all spans.
+
+  **Env:** `DD_ENV`
+</ParamField>
+
+<ParamField body="version" type="string">
+  The application version. If not set, dd-trace attempts to infer it from `package.json`.
+
+  **Env:** `DD_VERSION`
+</ParamField>
+
+<ParamField body="hostname" type="string" default="127.0.0.1">
+  The hostname of the Datadog Agent. Overridden by `url` if both are set.
+
+  **Env:** `DD_AGENT_HOST`
+</ParamField>
+
+<ParamField body="port" type="number | string" default="8126">
+  The port of the Datadog Agent.
+
+  **Env:** `DD_TRACE_AGENT_PORT`
+</ParamField>
+
+<ParamField body="url" type="string">
+  The full URL of the Datadog Agent (e.g., `http://localhost:8126`). Takes priority over `hostname` and `port`.
+
+  **Env:** `DD_TRACE_AGENT_URL`
+</ParamField>
+
+<ParamField body="tags" type="object">
+  Global tags applied to every span. Values are merged with `DD_TAGS`.
+
+  ```javascript
+  tags: { team: 'platform', datacenter: 'us-east-1' }
+  ```
+
+  **Env:** `DD_TAGS`, `OTEL_RESOURCE_ATTRIBUTES`
+</ParamField>
+
+<ParamField body="serviceMapping" type="object">
+  Override the service name for specific integrations. Keys are plugin names, values are service names.
+
+  ```javascript
+  serviceMapping: { pg: 'postgres-cluster', redis: 'cache' }
+  ```
+
+  **Env:** `DD_SERVICE_MAPPING` (comma-separated `key:value` pairs)
+</ParamField>
+
+<ParamField body="plugins" type="boolean" default="true">
+  Whether to load all built-in plugins automatically. Set to `false` to disable all auto-instrumentation and enable plugins manually with `tracer.use()`.
+
+  **Env:** (not configurable via environment variable)
+</ParamField>
+
+<ParamField body="logger" type="object">
+  Custom logger instance. Must implement `error()`, `warn()`, `info()`, and `debug()` methods. Used when `DD_TRACE_DEBUG=true`.
+
+  ```javascript
+  logger: {
+    error: (err) => myLogger.error(err),
+    warn: (msg) => myLogger.warn(msg),
+    info: (msg) => myLogger.info(msg),
+    debug: (msg) => myLogger.debug(msg),
+  }
+  ```
+</ParamField>
+
+<ParamField body="logLevel" type="string" default="debug">
+  Minimum log level when debug logging is enabled. One of `debug`, `info`, `warn`, `error`.
+
+  **Env:** `DD_TRACE_LOG_LEVEL`, `OTEL_LOG_LEVEL`
+</ParamField>
+
+<ParamField body="startupLogs" type="boolean" default="false">
+  Print tracer configuration to the console at startup.
+
+  **Env:** `DD_TRACE_STARTUP_LOGS`
+</ParamField>
+
+<ParamField body="reportHostname" type="boolean" default="false">
+  Attach the hostname of the service host to every span. Useful when the Agent is on a different host and cannot determine the hostname automatically.
+
+  **Env:** `DD_TRACE_REPORT_HOSTNAME`
+</ParamField>
+
+<ParamField body="protocolVersion" type="string" default="0.4">
+  Trace Agent API protocol version. The version must be supported by the Agent installed.
+
+  **Env:** `DD_TRACE_AGENT_PROTOCOL_VERSION`
+</ParamField>
+
+<ParamField body="apmTracingEnabled" type="boolean" default="true">
+  Whether to enable APM tracing. Set to `false` when using standalone Datadog products (e.g., AppSec standalone mode) without APM.
+
+  **Env:** `DD_APM_TRACING_ENABLED`
+</ParamField>
+
+## Tracing
+
+<ParamField body="flushInterval" type="number" default="2000">
+  Interval in milliseconds at which the tracer submits traces to the Agent. In Lambda environments this is automatically set to `0` (flush synchronously).
+
+  **Env:** `DD_TRACE_FLUSH_INTERVAL`
+</ParamField>
+
+<ParamField body="flushMinSpans" type="number" default="1000">
+  Number of spans before partially exporting a trace. Prevents very large traces from being held entirely in memory.
+
+  **Env:** `DD_TRACE_PARTIAL_FLUSH_MIN_SPANS`
+</ParamField>
+
+<ParamField body="tracePropagationStyle" type="string[] | PropagationStyle">
+  Context propagation formats for injection and extraction. Accepts an array of format names (`datadog`, `tracecontext`, `b3`, `b3 single header`, `none`) or an object with separate `inject` and `extract` arrays.
+
+  ```javascript
+  tracePropagationStyle: ['datadog', 'tracecontext']
+  // or
+  tracePropagationStyle: {
+    inject: ['datadog', 'tracecontext'],
+    extract: ['datadog', 'tracecontext', 'b3'],
+  }
+  ```
+
+  **Env:** `DD_TRACE_PROPAGATION_STYLE`, `DD_TRACE_PROPAGATION_STYLE_INJECT`, `DD_TRACE_PROPAGATION_STYLE_EXTRACT`
+</ParamField>
+
+<ParamField body="headerTags" type="string[]">
+  HTTP request headers to capture as span tags. Each entry is a header name; the tag name will be `http.request.headers.<name>`.
+
+  **Env:** `DD_TRACE_HEADER_TAGS`
+</ParamField>
+
+<ParamField body="dbmPropagationMode" type="string" default="disabled">
+  Database Monitoring to APM link mode. One of `disabled`, `service`, or `full`.
+
+  **Env:** `DD_DBM_PROPAGATION_MODE`
+</ParamField>
+
+<ParamField body="dsmEnabled" type="boolean" default="false">
+  Whether to enable Data Streams Monitoring.
+
+  **Env:** `DD_DATA_STREAMS_ENABLED`
+</ParamField>
+
+<ParamField body="clientIpEnabled" type="boolean" default="false">
+  Collect client IP from incoming request headers and tag spans with `http.client_ip`.
+
+  **Env:** `DD_TRACE_CLIENT_IP_ENABLED`
+</ParamField>
+
+<ParamField body="clientIpHeader" type="string">
+  Custom header name from which to read the client IP. Takes precedence over automatic detection.
+
+  **Env:** `DD_TRACE_CLIENT_IP_HEADER`
+</ParamField>
+
+## Sampling
+
+<ParamField body="sampleRate" type="number">
+  Global trace sample rate, between `0` (drop all) and `1` (keep all). When not set, the Agent determines the rate via priority sampling.
+
+  **Env:** `DD_TRACE_SAMPLE_RATE`, `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG`
+</ParamField>
+
+<ParamField body="rateLimit" type="number">
+  Global rate limit (traces per second) applied after sampling rules. Defaults to deferring the decision to the Agent.
+
+  **Env:** `DD_TRACE_RATE_LIMIT`
+</ParamField>
+
+<ParamField body="samplingRules" type="SamplingRule[]" default="[]">
+  Array of sampling rules applied to priority sampling. Each rule specifies `sampleRate` and optionally `service` (string or regex) and `name` (string or regex).
+
+  ```javascript
+  samplingRules: [
+    { service: 'my-api', name: 'express.request', sampleRate: 1.0 },
+    { service: /^worker-/, sampleRate: 0.1 },
+  ]
+  ```
+
+  **Env:** `DD_TRACE_SAMPLING_RULES` (JSON array)
+</ParamField>
+
+<ParamField body="spanSamplingRules" type="SpanSamplingRule[]" default="[]">
+  Span sampling rules that keep individual spans from dropped traces. Each rule specifies optional `service`, `name`, `sampleRate` (default `1.0`), and `maxPerSecond`.
+
+  ```javascript
+  spanSamplingRules: [
+    { service: 'my-api', name: 'redis.command', sampleRate: 1.0, maxPerSecond: 50 },
+  ]
+  ```
+
+  **Env:** `DD_SPAN_SAMPLING_RULES`, `DD_SPAN_SAMPLING_RULES_FILE`
+</ParamField>
+
+## Log injection
+
+<ParamField body="logInjection" type="boolean" default="false">
+  Inject `dd.trace_id`, `dd.span_id`, `dd.service`, `dd.env`, and `dd.version` fields into log records automatically. Works with supported logging libraries (winston, bunyan, pino, etc.).
+
+  **Env:** `DD_LOGS_INJECTION`
+</ParamField>
+
+## Runtime metrics
+
+<ParamField body="runtimeMetrics" type="boolean | object" default="false">
+  Enable runtime metrics collection. Can be a boolean or an object to control individual metric types:
+
+  ```javascript
+  runtimeMetrics: true
+  // or
+  runtimeMetrics: {
+    enabled: true,
+    gc: true,         // garbage collection metrics
+    eventLoop: true,  // event loop lag metrics
+  }
+  ```
+
+  **Env:** `DD_RUNTIME_METRICS_ENABLED`, `DD_RUNTIME_METRICS_GC_ENABLED`, `DD_RUNTIME_METRICS_EVENT_LOOP_ENABLED`
+</ParamField>
+
+<ParamField body="dogstatsd" type="object">
+  Configuration for the DogStatsD agent that receives runtime metrics.
+
+  ```javascript
+  dogstatsd: {
+    hostname: 'localhost', // DD_DOGSTATSD_HOST
+    port: 8125,            // DD_DOGSTATSD_PORT
+  }
+  ```
+</ParamField>
+
+## Profiling
+
+<ParamField body="profiling" type="boolean" default="false">
+  Enable continuous profiling. Sends CPU, heap, and wall-time profiles to Datadog Profiling.
+
+  **Env:** `DD_PROFILING_ENABLED`
+</ParamField>
+
+## AppSec
+
+<ParamField body="appsec" type="boolean | object" default="false">
+  Enable Application Security Monitoring. Can be a boolean or a configuration object:
+
+  ```javascript
+  appsec: true
+  // or
+  appsec: {
+    enabled: true,
+    rules: '/path/to/custom-rules.json',
+    rateLimit: 100,
+    wafTimeout: 5000,
+    obfuscatorKeyRegex: 'password|secret',
+    obfuscatorValueRegex: undefined,
+    rasp: { enabled: false },
+    stackTrace: {
+      enabled: true,
+      maxStackTraces: 2,
+      maxDepth: 32,
+    },
+    eventTracking: {
+      mode: 'identification', // 'anonymous' | 'identification' | 'disabled'
+    },
+    apiSecurity: {
+      enabled: true,
+      endpointCollectionEnabled: true,
+    },
+  }
+  ```
+
+  **Env:** `DD_APPSEC_ENABLED`
+</ParamField>
+
+## IAST
+
+<ParamField body="iast" type="boolean | object" default="false">
+  Enable Interactive Application Security Testing. Can be a boolean or a configuration object. IAST detects code-level vulnerabilities at runtime.
+
+  **Env:** `DD_IAST_ENABLED`
+</ParamField>
+
+## Remote configuration
+
+<ParamField body="remoteConfig" type="object">
+  Configuration for Remote Config, which allows updating tracer settings without redeployment.
+
+  ```javascript
+  remoteConfig: {
+    pollInterval: 5, // seconds between polls, DD_REMOTE_CONFIG_POLL_INTERVAL_SECONDS
+  }
+  ```
+
+  **Env:** `DD_REMOTE_CONFIGURATION_ENABLED`, `DD_REMOTE_CONFIG_POLL_INTERVAL_SECONDS`
+</ParamField>
+
+## Code origin for spans
+
+<ParamField body="codeOriginForSpans" type="object">
+  Attach the source code location where a span was created to the span metadata.
+
+  ```javascript
+  codeOriginForSpans: { enabled: true }
+  ```
+
+  **Env:** `DD_CODE_ORIGIN_FOR_SPANS_ENABLED`
+</ParamField>
+
+## Cloud payload tagging
+
+<ParamField body="cloudPayloadTagging" type="object">
+  Tag cloud provider request/response payloads using JSONPath queries.
+
+  ```javascript
+  cloudPayloadTagging: {
+    request: '$.Body',
+    response: '$.StatusCode',
+  }
+  ```
+
+  **Env:** `DD_TRACE_CLOUD_REQUEST_PAYLOAD_TAGGING`, `DD_TRACE_CLOUD_RESPONSE_PAYLOAD_TAGGING`
+</ParamField>
+
+## Experimental options
+
+<ParamField body="experimental" type="object">
+  Experimental features enabled individually. These may change or be removed without a major version bump.
+
+  ```javascript
+  experimental: {
+    exporter: 'agent', // 'log' | 'agent' | 'datadog'
+    enableGetRumData: false,
+    b3: false,
+  }
+  ```
+
+  **Env:** `DD_TRACE_EXPERIMENTAL_EXPORTER`, `DD_TRACE_EXPERIMENTAL_GET_RUM_DATA_ENABLED`, `DD_TRACE_EXPERIMENTAL_B3_ENABLED`
+</ParamField>

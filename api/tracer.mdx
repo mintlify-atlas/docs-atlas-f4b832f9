@@ -1,0 +1,523 @@
+---
+title: "Tracer"
+description: "The main entry point for the dd-trace Node.js APM library. Initialize tracing, start spans, and manage context propagation."
+---
+
+The `Tracer` is the singleton exported by `require('dd-trace')`. It must be initialized before importing other libraries.
+
+```typescript
+import tracer from 'dd-trace'
+```
+
+## Methods
+
+### `init(options?)`
+
+Initializes the tracer. This should be called before importing any other libraries to ensure all automatic instrumentation is set up correctly.
+
+```typescript
+init(options?: TracerOptions): this
+```
+
+<ParamField path="options" type="TracerOptions">
+  Configuration options for the tracer. All options can also be set via environment variables.
+</ParamField>
+
+<ResponseField name="returns" type="Tracer">
+  The `Tracer` instance, for chaining.
+</ResponseField>
+
+```javascript
+const tracer = require('dd-trace').init({
+  service: 'my-service',
+  env: 'production',
+  version: '1.0.0',
+  logInjection: true,
+})
+```
+
+<Note>
+  `init()` must be called before importing any other modules. Calling it after importing instrumented libraries (e.g., `express`, `pg`) will result in incomplete tracing.
+</Note>
+
+#### TracerOptions
+
+| Option | Type | Default | Env var | Description |
+|--------|------|---------|---------|-------------|
+| `service` | `string` | inferred from `package.json` | `DD_SERVICE` | Service name |
+| `env` | `string` | — | `DD_ENV` | Environment (e.g., `prod`, `staging`) |
+| `version` | `string` | inferred from `package.json` | `DD_VERSION` | Application version |
+| `hostname` | `string` | `127.0.0.1` | `DD_AGENT_HOST` | Trace agent hostname |
+| `port` | `number` | `8126` | `DD_TRACE_AGENT_PORT` | Trace agent port |
+| `url` | `string` | — | `DD_TRACE_AGENT_URL` | Trace agent URL (takes priority over hostname/port) |
+| `sampleRate` | `number` | — | `DD_TRACE_SAMPLE_RATE` | Ingestion sample rate (0–1) |
+| `rateLimit` | `number` | — | `DD_TRACE_RATE_LIMIT` | Global rate limit for ingestion |
+| `logInjection` | `boolean` | `false` | `DD_LOGS_INJECTION` | Inject trace IDs into log records |
+| `startupLogs` | `boolean` | `false` | `DD_TRACE_STARTUP_LOGS` | Emit startup diagnostic logs |
+| `profiling` | `boolean` | — | `DD_PROFILING_ENABLED` | Enable continuous profiling |
+| `runtimeMetrics` | `boolean` | `false` | `DD_RUNTIME_METRICS_ENABLED` | Enable runtime metrics |
+| `plugins` | `boolean` | `true` | — | Load all built-in plugins |
+| `tags` | `object` | — | `DD_TAGS` | Global tags applied to every span |
+| `logLevel` | `string` | `debug` | `DD_TRACE_LOG_LEVEL` | Minimum log level |
+| `dbmPropagationMode` | `string` | `disabled` | `DD_DBM_PROPAGATION_MODE` | DBM-to-APM link injection mode |
+| `dsmEnabled` | `boolean` | `false` | `DD_DATA_STREAMS_ENABLED` | Enable Data Streams Monitoring |
+| `appsec` | `boolean \| object` | — | `DD_APPSEC_ENABLED` | AppSec configuration |
+| `iast` | `boolean \| object` | — | `DD_IAST_ENABLED` | IAST configuration |
+| `llmobs` | `LLMObsEnableOptions` | — | `DD_LLMOBS_ENABLED` | LLM Observability configuration |
+
+---
+
+### `startSpan(name, options?)`
+
+Starts and returns a new `Span` representing a logical unit of work. The span is **not** automatically activated on the current scope — use `trace()` or `scope().activate()` for that.
+
+```typescript
+startSpan(name: string, options?: SpanOptions): Span
+```
+
+<ParamField path="name" type="string" required>
+  The name of the operation.
+</ParamField>
+
+<ParamField path="options" type="SpanOptions">
+  Options for the span.
+
+  <Expandable title="SpanOptions properties">
+    <ResponseField name="childOf" type="Span | SpanContext | null">
+      Parent span or context. Pass `null` to create a root span even when a parent exists in the current async context. If omitted, the parent is inferred from the current async context.
+    </ResponseField>
+    <ResponseField name="tags" type="object">
+      Key-value pairs to set as tags on the span.
+    </ResponseField>
+    <ResponseField name="startTime" type="number">
+      Explicit start time in milliseconds.
+    </ResponseField>
+    <ResponseField name="integrationName" type="string">
+      Name of the integration that created this span.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Span">
+  A new `Span` object. Call `span.finish()` when the operation completes.
+</ResponseField>
+
+```javascript
+const span = tracer.startSpan('db.query', {
+  childOf: parentSpan,
+  tags: { 'db.type': 'postgresql' },
+})
+
+try {
+  // perform operation
+} finally {
+  span.finish()
+}
+```
+
+---
+
+### `trace(name, fn)` / `trace(name, options, fn)`
+
+Instruments a function by automatically creating a span that is activated on the current scope. The span is finished automatically when the function returns.
+
+```typescript
+trace<T>(name: string, fn: (span: Span) => T): T
+trace<T>(name: string, fn: (span: Span, done: (error?: Error) => void) => T): T
+trace<T>(name: string, options: TraceOptions & SpanOptions, fn: (span?: Span, done?: (error?: Error) => void) => T): T
+```
+
+<ParamField path="name" type="string" required>
+  The operation name.
+</ParamField>
+
+<ParamField path="options" type="TraceOptions & SpanOptions">
+  Span and trace options.
+
+  <Expandable title="TraceOptions properties">
+    <ResponseField name="resource" type="string">
+      Resource name (max 5000 characters).
+    </ResponseField>
+    <ResponseField name="service" type="string">
+      Service name (max 100 characters).
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      Span type (e.g., `web`, `db`, `cache`).
+    </ResponseField>
+    <ResponseField name="links" type="array">
+      Array of span links: `{ context: SpanContext, attributes?: object }`.
+    </ResponseField>
+    <ResponseField name="measured" type="boolean">
+      Whether to measure the span for metrics.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="fn" type="Function" required>
+  The function to instrument. Receives the active `span` as the first argument. If the function accepts a second `done` callback parameter, the span is finished when `done` is called.
+</ParamField>
+
+<ResponseField name="returns" type="T">
+  The return value of `fn`.
+</ResponseField>
+
+The span is finished automatically when:
+- The function returns a non-promise value (synchronous)
+- The returned promise resolves or rejects
+- The `done` callback is called (when the function accepts two parameters)
+
+```javascript
+// Synchronous
+tracer.trace('compute', span => {
+  span.setTag('key', 'value')
+  // span finished when function returns
+})
+
+// Callback style
+tracer.trace('web.request', (span, done) => {
+  fetchData((err, data) => {
+    done(err)
+  })
+})
+
+// Promise
+tracer.trace('web.request', () => {
+  return fetch('/api/data')
+})
+
+// Async/await
+async function handle() {
+  return await tracer.trace('web.request', async () => {
+    return await fetch('/api/data')
+  })
+}
+
+// With options
+tracer.trace('web.request', { resource: '/users', service: 'api', type: 'web' }, span => {
+  // span has resource, service, and type set
+})
+```
+
+---
+
+### `wrap(name, fn)` / `wrap(name, options, fn)`
+
+Wraps a function so that `tracer.trace()` is called automatically every time the wrapped function is called.
+
+```typescript
+wrap<T = (...args: any[]) => any>(name: string, fn: T): T
+wrap<T = (...args: any[]) => any>(name: string, options: TraceOptions & SpanOptions, fn: T): T
+wrap<T = (...args: any[]) => any>(name: string, options: (...args: any[]) => TraceOptions & SpanOptions, fn: T): T
+```
+
+<ParamField path="name" type="string" required>
+  The operation name.
+</ParamField>
+
+<ParamField path="options" type="TraceOptions & SpanOptions | Function">
+  Static options object, or a function that receives the wrapped function's arguments and returns options dynamically.
+</ParamField>
+
+<ParamField path="fn" type="Function" required>
+  The function to wrap.
+</ParamField>
+
+<ResponseField name="returns" type="T">
+  A new function with the same signature as `fn`.
+</ResponseField>
+
+```javascript
+function handle() {
+  // some code
+}
+
+const handleWithTrace = tracer.wrap('web.request', handle)
+
+// With dynamic options
+const wrappedFn = tracer.wrap(
+  'db.query',
+  (query) => ({ resource: query.table }),
+  executeQuery
+)
+```
+
+<Note>
+  If the last argument of the wrapped function is a function (callback), the span finishes when that callback is called.
+</Note>
+
+---
+
+### `inject(spanContext, format, carrier)`
+
+Injects a `SpanContext` into a carrier object for cross-process propagation.
+
+```typescript
+inject(spanContext: SpanContext | Span, format: string, carrier: any): void
+```
+
+<ParamField path="spanContext" type="SpanContext | Span" required>
+  The context to inject. A `Span` instance may be passed directly (its `.context()` will be used).
+</ParamField>
+
+<ParamField path="format" type="string" required>
+  The carrier format. Common values: `'http_headers'`, `'text_map'`, `'binary'`.
+</ParamField>
+
+<ParamField path="carrier" type="any" required>
+  The carrier object to inject the context into (e.g., an HTTP headers object).
+</ParamField>
+
+```javascript
+const headers = {}
+tracer.inject(span.context(), 'http_headers', headers)
+// headers now contains tracing propagation fields
+fetch('/api/downstream', { headers })
+```
+
+---
+
+### `extract(format, carrier)`
+
+Extracts a `SpanContext` from a carrier object.
+
+```typescript
+extract(format: string, carrier: any): SpanContext | null
+```
+
+<ParamField path="format" type="string" required>
+  The carrier format (e.g., `'http_headers'`, `'text_map'`).
+</ParamField>
+
+<ParamField path="carrier" type="any" required>
+  The carrier object to extract from (e.g., incoming request headers).
+</ParamField>
+
+<ResponseField name="returns" type="SpanContext | null">
+  The extracted `SpanContext`, or `null` if no context was found.
+</ResponseField>
+
+```javascript
+// In a server handler
+app.get('/api', (req, res) => {
+  const parentContext = tracer.extract('http_headers', req.headers)
+  const span = tracer.startSpan('web.request', { childOf: parentContext })
+  // ...
+})
+```
+
+---
+
+### `scope()`
+
+Returns a reference to the current `Scope` manager, used for manual context propagation.
+
+```typescript
+scope(): Scope
+```
+
+<ResponseField name="returns" type="Scope">
+  The active `Scope` manager.
+</ResponseField>
+
+```javascript
+const scope = tracer.scope()
+const activeSpan = scope.active()
+```
+
+---
+
+### `use(plugin, config)`
+
+Enables and optionally configures a built-in plugin.
+
+```typescript
+use<P extends keyof Plugins>(plugin: P, config?: Plugins[P] | boolean): this
+```
+
+<ParamField path="plugin" type="string" required>
+  The name of the built-in plugin (e.g., `'express'`, `'pg'`, `'redis'`).
+</ParamField>
+
+<ParamField path="config" type="object | boolean">
+  Plugin-specific configuration object, or `false` to disable the plugin.
+</ParamField>
+
+<ResponseField name="returns" type="Tracer">
+  The `Tracer` instance, for chaining.
+</ResponseField>
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('pg', {
+  service: 'pg-cluster',
+})
+
+tracer.use('express', {
+  hooks: {
+    request: (span, req, res) => {
+      span.setTag('customer.id', req.query.id)
+    },
+  },
+})
+
+// Disable a plugin
+tracer.use('fs', false)
+```
+
+---
+
+### `setUser(user)`
+
+Links an authenticated user to the current trace.
+
+```typescript
+setUser(user: User): Tracer
+```
+
+<ParamField path="user" type="User" required>
+  User properties. The `id` field is required.
+
+  <Expandable title="User properties">
+    <ResponseField name="id" type="string" required>
+      Unique identifier of the user.
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      Email address.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      User-friendly display name.
+    </ResponseField>
+    <ResponseField name="session_id" type="string">
+      Session ID.
+    </ResponseField>
+    <ResponseField name="role" type="string">
+      Role the user is acting under.
+    </ResponseField>
+    <ResponseField name="scope" type="string">
+      Granted authorizations (e.g., OAuth2 scopes).
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Tracer">
+  The `Tracer` instance.
+</ResponseField>
+
+```javascript
+tracer.setUser({
+  id: '123456789',         // required
+  email: 'jane@example.com',
+  name: 'Jane Doe',
+  session_id: '987654321',
+  role: 'admin',
+  custom_field: 'value',   // arbitrary fields accepted
+})
+```
+
+---
+
+### `setUrl(url)`
+
+Sets the URL for the trace agent after initialization. Only use this when the URL cannot be set at `init()` time.
+
+```typescript
+setUrl(url: string): this
+```
+
+<ParamField path="url" type="string" required>
+  The trace agent URL (e.g., `'http://localhost:8126'`).
+</ParamField>
+
+<ResponseField name="returns" type="Tracer">
+  The `Tracer` instance, for chaining.
+</ResponseField>
+
+---
+
+### `getRumData()`
+
+Returns an HTML string containing `<meta>` tags for correlating the current server-side trace with a Real User Monitoring (RUM) view.
+
+```typescript
+getRumData(): string
+```
+
+<ResponseField name="returns" type="string">
+  HTML `<meta>` tag string to include in the document `<head>`.
+</ResponseField>
+
+<Note>
+  Requires `experimental.enableGetRumData: true` in `TracerOptions`. The resulting HTML must not be cached, as the tags are time-sensitive and user-specific.
+</Note>
+
+```javascript
+const tracer = require('dd-trace').init({
+  experimental: { enableGetRumData: true },
+})
+
+// In a server-rendered page handler
+res.send(`<html><head>${tracer.getRumData()}</head><body>...</body></html>`)
+```
+
+---
+
+## Properties
+
+### `appsec`
+
+Access the Application Security Management (AppSec) SDK.
+
+```typescript
+appsec: Appsec
+```
+
+See the [AppSec API](/api/appsec) reference.
+
+---
+
+### `llmobs`
+
+Access the LLM Observability SDK.
+
+```typescript
+llmobs: LLMObs
+```
+
+See the [LLMObs API](/api/llmobs) reference.
+
+---
+
+### `dogstatsd`
+
+Access the DogStatsD metrics client.
+
+```typescript
+dogstatsd: DogStatsD
+```
+
+See the [DogStatsD API](/api/dogstatsd) reference.
+
+---
+
+### `dataStreamsCheckpointer`
+
+Access the Data Streams Monitoring manual checkpointer.
+
+```typescript
+dataStreamsCheckpointer: DataStreamsCheckpointer
+```
+
+See the [Data Streams API](/api/data-streams) reference.
+
+---
+
+### `TracerProvider`
+
+OpenTelemetry-compatible `TracerProvider` constructor for registering dd-trace with `@opentelemetry/api`.
+
+```typescript
+TracerProvider: opentelemetry.TracerProvider
+```
+
+See the [OpenTelemetry Tracing](/api/opentelemetry/tracing) reference.

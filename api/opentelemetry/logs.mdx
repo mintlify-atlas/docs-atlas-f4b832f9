@@ -1,0 +1,108 @@
+---
+title: "OpenTelemetry Logs"
+description: "Use the OpenTelemetry Logs API with dd-trace as a drop-in LoggerProvider. Enable with DD_LOGS_OTEL_ENABLED=true."
+---
+
+dd-trace includes experimental support for OpenTelemetry logs. It is designed as a drop-in replacement for the OpenTelemetry Logs SDK and emits structured log data.
+
+<Note>
+  This feature is experimental. Enable it by setting `DD_LOGS_OTEL_ENABLED=true`.
+</Note>
+
+## Setup
+
+```bash
+DD_LOGS_OTEL_ENABLED=true node app.js
+```
+
+```javascript
+require('dd-trace').init()
+const { logs } = require('@opentelemetry/api-logs')
+
+const logger = logs.getLogger('my-service', '1.0.0')
+```
+
+## Emitting logs
+
+Use `logger.emit()` to emit structured log records:
+
+```javascript
+logger.emit({
+  severityText: 'INFO',
+  severityNumber: 9,
+  body: 'User logged in',
+  attributes: {
+    'user.id': '123',
+    'http.method': 'POST',
+  },
+})
+```
+
+## Severity levels
+
+OpenTelemetry severity numbers map to the following severity text values:
+
+| `severityNumber` | `severityText` | Description |
+|------------------|----------------|-------------|
+| 1–4 | `TRACE` | Trace-level messages |
+| 5–8 | `DEBUG` | Debug messages |
+| 9–12 | `INFO` | Informational messages |
+| 13–16 | `WARN` | Warnings |
+| 17–20 | `ERROR` | Errors |
+| 21–24 | `FATAL` | Fatal errors |
+
+## Full example
+
+```javascript
+require('dd-trace').init()
+const { logs, SeverityNumber } = require('@opentelemetry/api-logs')
+const express = require('express')
+
+const app = express()
+const logger = logs.getLogger('my-service', '1.0.0')
+
+app.get('/api/users/:id', (req, res) => {
+  logger.emit({
+    severityText: 'INFO',
+    severityNumber: SeverityNumber.INFO,
+    body: `Processing user request for ID: ${req.params.id}`,
+    attributes: {
+      'user.id': req.params.id,
+      'http.method': req.method,
+      'http.route': '/api/users/:id',
+    },
+  })
+
+  res.json({ id: req.params.id, name: 'John Doe' })
+})
+
+app.use((err, req, res, next) => {
+  logger.emit({
+    severityText: 'ERROR',
+    severityNumber: SeverityNumber.ERROR,
+    body: err.message,
+    attributes: {
+      'exception.type': err.name,
+      'exception.stacktrace': err.stack,
+    },
+  })
+  res.status(500).json({ error: 'Internal server error' })
+})
+
+app.listen(3000)
+```
+
+## Configuration
+
+The following environment variables control OpenTelemetry logs behavior:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DD_LOGS_OTEL_ENABLED` | `false` | Enable OpenTelemetry logs support |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `http://localhost:4318/v1/logs` | OTLP endpoint for logs. Falls back to `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/logs` |
+| `OTEL_EXPORTER_OTLP_LOGS_HEADERS` | `{}` | Headers for log requests (JSON format). Falls back to `OTEL_EXPORTER_OTLP_HEADERS` |
+| `OTEL_EXPORTER_OTLP_LOGS_PROTOCOL` | `http/protobuf` | OTLP protocol. Options: `http/protobuf`, `http/json`. Falls back to `OTEL_EXPORTER_OTLP_PROTOCOL` |
+| `OTEL_EXPORTER_OTLP_LOGS_TIMEOUT` | `10000` | Request timeout in ms. Falls back to `OTEL_EXPORTER_OTLP_TIMEOUT` |
+| `OTEL_BSP_SCHEDULE_DELAY` | `5000` | Batch export delay in ms |
+| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | `512` | Maximum log records per batch |
+| `OTEL_BSP_MAX_QUEUE_SIZE` | `2048` | Maximum log records to queue before dropping |

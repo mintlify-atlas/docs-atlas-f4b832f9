@@ -1,0 +1,136 @@
+---
+title: "Working with Spans"
+description: "Add tags, handle errors, and manipulate spans created manually or by plugins."
+---
+
+Once you have a reference to a span—either from `tracer.trace()`, `tracer.startSpan()`, or `tracer.scope().active()`—you can read and modify it using the methods below.
+
+## Adding tags
+
+### `span.setTag(key, value)`
+
+Sets a single key/value tag on the span.
+
+```javascript
+tracer.trace('web.request', (span) => {
+  span.setTag('http.method', 'GET')
+  span.setTag('customer.id', req.user.id)
+  span.setTag('feature.flag', true)
+})
+```
+
+Tag values can be strings, numbers, or booleans. Objects are serialized to their string representation.
+
+### `span.addTags(keyValuePairs)`
+
+Sets multiple tags at once from an object.
+
+```javascript
+tracer.trace('db.query', (span) => {
+  span.addTags({
+    'db.type': 'postgres',
+    'db.instance': 'primary',
+    'db.statement': query
+  })
+})
+```
+
+## Changing the operation name
+
+### `span.setOperationName(name)`
+
+Overrides the operation name set at span creation. Useful when the actual operation name is only known after the span is started.
+
+```javascript
+tracer.trace('rpc.call', (span) => {
+  const method = resolveMethod(request)
+  span.setOperationName(`rpc.${method}`)
+})
+```
+
+## Finishing a span
+
+### `span.finish([finishTime])`
+
+Marks the span as finished. Pass an optional timestamp (in milliseconds since Unix epoch) to backdate the finish time.
+
+```javascript
+const span = tracer.startSpan('web.request')
+
+// Finish now
+span.finish()
+
+// Finish with a specific time
+span.finish(Date.now() - 50)
+```
+
+Spans created with `tracer.trace()` are finished automatically—do not call `span.finish()` on them unless you also want to finish early.
+
+## Reading span context
+
+### `span.context()`
+
+Returns the `SpanContext` for this span, which exposes the trace and span IDs.
+
+```javascript
+const ctx = span.context()
+console.log(ctx.toTraceId())  // '4bf92f3577b34da6a3ce929d0e0e4736'
+console.log(ctx.toSpanId())   // 'a3ce929d0e0e4736'
+console.log(ctx.toTraceparent()) // W3C traceparent string
+```
+
+The `SpanContext` is also used for distributed tracing via `tracer.inject()` and `tracer.extract()`.
+
+## Span links
+
+### `span.addLink(link)`
+
+Adds a causal link to another span. Links are useful when a span has multiple parents or a causal relationship that is not strictly parent/child.
+
+```javascript
+tracer.trace('batch.process', (span) => {
+  for (const item of batch) {
+    span.addLink({ context: item.spanContext, attributes: { 'link.type': 'producer' } })
+  }
+})
+```
+
+## Error handling
+
+Pass the `error` tag to record an error on a span. dd-trace recognizes the standard `error` key and marks the span as an error in the UI.
+
+```javascript
+tracer.trace('web.request', (span) => {
+  try {
+    riskyOperation()
+  } catch (err) {
+    span.setTag('error', err)
+    throw err
+  }
+})
+```
+
+With `tracer.trace()`, any exception thrown from the callback is **automatically** recorded as an error. The explicit `setTag('error', err)` pattern is only needed when you catch and re-throw, or when using `tracer.startSpan()` directly.
+
+## Custom tags best practices
+
+<Tip>
+  Use namespaced tag keys (e.g., `customer.id`, `order.amount`) to avoid collisions with reserved Datadog tags.
+</Tip>
+
+**Reserved tags with special meaning:**
+
+| Tag | Effect |
+|---|---|
+| `error` | Marks the span as an error. Accepts an `Error` object or a string. |
+| `error.type` | Error class name. |
+| `error.message` | Human-readable error message. |
+| `error.stack` | Stack trace string. |
+| `service.name` | Overrides the service name for OpenTracing compatibility. |
+| `resource.name` | Overrides the resource name for OpenTracing compatibility. |
+| `span.type` | Overrides the span type for OpenTracing compatibility. |
+
+**Tag value limits:**
+
+- String values are truncated at 25,000 UTF-8 bytes.
+- Use numeric values (not strings) for quantitative measurements to enable aggregation in Datadog.

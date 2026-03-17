@@ -1,0 +1,301 @@
+---
+title: "AppSec API"
+description: "The Application Security Management SDK lets you track user events, check for blocked users, and send custom security events from application code."
+---
+
+The AppSec SDK is available as `tracer.appsec`. It provides methods for user tracking, blocking, and custom security event tracking.
+
+```javascript
+const tracer = require('dd-trace').init({
+  appsec: { enabled: true },
+})
+const appsec = tracer.appsec
+```
+
+<Note>
+  AppSec must be enabled (`DD_APPSEC_ENABLED=true` or `appsec: { enabled: true }` in `TracerOptions`) for these methods to have effect. All methods are safe to call when AppSec is disabled — they become no-ops.
+</Note>
+
+## Methods
+
+### `setUser(user)`
+
+Links an authenticated user to the current trace.
+
+```typescript
+setUser(user: User): void
+```
+
+<ParamField path="user" type="User" required>
+  User properties. The `id` field is required.
+
+  <Expandable title="User properties">
+    <ResponseField name="id" type="string" required>
+      Unique identifier of the user.
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      User email address.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Display name.
+    </ResponseField>
+    <ResponseField name="session_id" type="string">
+      Session identifier.
+    </ResponseField>
+    <ResponseField name="role" type="string">
+      Role the user is acting under.
+    </ResponseField>
+    <ResponseField name="scope" type="string">
+      Granted authorizations (e.g., OAuth2 scopes).
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```javascript
+app.post('/login', (req, res) => {
+  const user = authenticate(req.body)
+  if (user) {
+    tracer.appsec.setUser({
+      id: user.id,
+      email: user.email,
+      name: user.displayName,
+    })
+  }
+})
+```
+
+---
+
+### `isUserBlocked(user)`
+
+Checks whether the given user should be blocked according to AppSec rules (e.g., a blocklist). If no user is currently linked to the trace, this method also links the given user.
+
+```typescript
+isUserBlocked(user: User): boolean
+```
+
+<ParamField path="user" type="User" required>
+  The user to check. The `id` field is required.
+</ParamField>
+
+<ResponseField name="returns" type="boolean">
+  `true` if the user should be blocked, `false` otherwise.
+</ResponseField>
+
+```javascript
+app.get('/dashboard', (req, res) => {
+  const user = req.session.user
+
+  if (tracer.appsec.isUserBlocked(user)) {
+    tracer.appsec.blockRequest(req, res)
+    return // stop processing the request
+  }
+
+  res.render('dashboard')
+})
+```
+
+---
+
+### `blockRequest(req?, res?)`
+
+Sends a "blocked" response based on the request `Accept` header and ends the response. After calling this method, you must stop processing the request.
+
+```typescript
+blockRequest(req?: IncomingMessage, res?: OutgoingMessage): boolean
+```
+
+<ParamField path="req" type="IncomingMessage">
+  The request object. If omitted, the current request is used.
+</ParamField>
+
+<ParamField path="res" type="OutgoingMessage">
+  The response object. If omitted, the current response is used.
+</ParamField>
+
+<ResponseField name="returns" type="boolean">
+  `true` if the blocking response was sent successfully, `false` otherwise.
+</ResponseField>
+
+<Warning>
+  You must stop processing the request after calling `blockRequest()`. Continued processing after blocking can result in unintended side effects.
+</Warning>
+
+```javascript
+if (tracer.appsec.isUserBlocked(user)) {
+  tracer.appsec.blockRequest(req, res)
+  return // always stop here
+}
+```
+
+---
+
+### `trackUserLoginSuccessEvent(user, metadata?)` (deprecated)
+
+Links a successful login event to the current trace.
+
+```typescript
+trackUserLoginSuccessEvent(user: User, metadata?: { [key: string]: string }): void
+```
+
+<Warning>
+  Deprecated in favor of `appsec.eventTrackingV2.trackUserLoginSuccess()`. Use that instead for new code.
+</Warning>
+
+<ParamField path="user" type="User" required>
+  Properties of the authenticated user.
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Custom string key-value pairs to attach to the event.
+</ParamField>
+
+```javascript
+// Deprecated
+tracer.appsec.trackUserLoginSuccessEvent(
+  { id: 'user-123', email: 'jane@example.com' },
+  { login_method: 'password' }
+)
+
+// Use instead:
+tracer.appsec.eventTrackingV2.trackUserLoginSuccess(
+  'jane@example.com',
+  { id: 'user-123', email: 'jane@example.com' },
+  { login_method: 'password' }
+)
+```
+
+---
+
+### `trackUserLoginFailureEvent(userId, exists, metadata?)` (deprecated)
+
+Links a failed login event to the current trace.
+
+```typescript
+trackUserLoginFailureEvent(userId: string, exists: boolean, metadata?: { [key: string]: string }): void
+```
+
+<Warning>
+  Deprecated in favor of `appsec.eventTrackingV2.trackUserLoginFailure()`.
+</Warning>
+
+<ParamField path="userId" type="string" required>
+  The user ID of the attempted login.
+</ParamField>
+
+<ParamField path="exists" type="boolean" required>
+  Whether the user ID exists in the system.
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Custom string key-value pairs to attach to the event.
+</ParamField>
+
+```javascript
+// Deprecated
+tracer.appsec.trackUserLoginFailureEvent('unknown-user', false)
+
+// Use instead:
+tracer.appsec.eventTrackingV2.trackUserLoginFailure('unknown-user', false)
+```
+
+---
+
+### `trackCustomEvent(eventName, metadata?)`
+
+Links a custom security event to the current trace.
+
+```typescript
+trackCustomEvent(eventName: string, metadata?: { [key: string]: string }): void
+```
+
+<ParamField path="eventName" type="string" required>
+  The name of the custom event.
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Custom string key-value pairs to attach to the event.
+</ParamField>
+
+```javascript
+tracer.appsec.trackCustomEvent('payment.high_value', {
+  amount: '9999.00',
+  currency: 'USD',
+  user_id: 'user-123',
+})
+```
+
+---
+
+## `eventTrackingV2`
+
+The `eventTrackingV2` sub-object provides the current generation of user event tracking methods.
+
+### `trackUserLoginSuccess(login, user?, metadata?)`
+
+Links a successful login event to the current trace. Also calls `setUser()` internally to link the user.
+
+```typescript
+trackUserLoginSuccess(login: string, user?: User | null, metadata?: any): void
+trackUserLoginSuccess(login: string, userId: string, metadata?: any): void
+```
+
+<ParamField path="login" type="string" required>
+  The login key (username, email) used to authenticate.
+</ParamField>
+
+<ParamField path="user" type="User | string | null">
+  User properties object, a user ID string, or `null`.
+</ParamField>
+
+<ParamField path="metadata" type="any">
+  Custom fields to attach to the event.
+</ParamField>
+
+```javascript
+app.post('/login', async (req, res) => {
+  const user = await authenticate(req.body.email, req.body.password)
+  if (user) {
+    tracer.appsec.eventTrackingV2.trackUserLoginSuccess(
+      req.body.email,
+      { id: user.id, email: user.email },
+      { login_method: 'password' }
+    )
+    req.session.userId = user.id
+    res.redirect('/dashboard')
+  }
+})
+```
+
+### `trackUserLoginFailure(login, exists?, metadata?)`
+
+Links a failed login event to the current trace.
+
+```typescript
+trackUserLoginFailure(login: string, exists: boolean, metadata?: any): void
+trackUserLoginFailure(login: string, metadata?: any): void
+```
+
+<ParamField path="login" type="string" required>
+  The login key used in the failed attempt.
+</ParamField>
+
+<ParamField path="exists" type="boolean">
+  Whether the login exists in the system.
+</ParamField>
+
+<ParamField path="metadata" type="any">
+  Custom fields to attach to the event.
+</ParamField>
+
+```javascript
+app.post('/login', async (req, res) => {
+  const exists = await userExists(req.body.email)
+  tracer.appsec.eventTrackingV2.trackUserLoginFailure(
+    req.body.email,
+    exists,
+    { ip: req.ip }
+  )
+  res.status(401).json({ error: 'Invalid credentials' })
+})
+```

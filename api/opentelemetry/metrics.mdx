@@ -1,0 +1,136 @@
+---
+title: "OpenTelemetry Metrics"
+description: "Use the OpenTelemetry Metrics API with dd-trace as a drop-in MeterProvider. Enable with DD_METRICS_OTEL_ENABLED=true."
+---
+
+dd-trace includes experimental support for OpenTelemetry metrics. It is designed as a drop-in replacement for the OpenTelemetry Metrics SDK and integrates with OTLP export infrastructure.
+
+<Note>
+  This feature is experimental. Enable it by setting `DD_METRICS_OTEL_ENABLED=true`.
+</Note>
+
+## Setup
+
+```bash
+DD_METRICS_OTEL_ENABLED=true node app.js
+```
+
+```javascript
+require('dd-trace').init()
+const { metrics } = require('@opentelemetry/api')
+
+const meter = metrics.getMeter('my-service', '1.0.0')
+```
+
+## Instrument types
+
+### Counter
+
+A monotonically increasing value. Use for counts of events.
+
+```javascript
+const requestCounter = meter.createCounter('http.requests', {
+  description: 'Total HTTP requests',
+  unit: 'requests',
+})
+
+// Record a value with attributes
+requestCounter.add(1, { method: 'GET', status: 200 })
+```
+
+### Histogram
+
+Records distributions of values. Use for latencies, sizes, and other measured values.
+
+```javascript
+const durationHistogram = meter.createHistogram('http.duration', {
+  description: 'HTTP request duration',
+  unit: 'ms',
+})
+
+durationHistogram.record(145, { route: '/api/users' })
+```
+
+### UpDownCounter
+
+A counter that can increase or decrease. Use for values that go up and down, such as active connections.
+
+```javascript
+const connectionCounter = meter.createUpDownCounter('active.connections', {
+  description: 'Active connections',
+  unit: 'connections',
+})
+
+connectionCounter.add(1)   // New connection
+connectionCounter.add(-1)  // Connection closed
+```
+
+### ObservableGauge
+
+An asynchronous instrument for values observed at collection time. Use for current state values like CPU usage or memory.
+
+```javascript
+const cpuGauge = meter.createObservableGauge('system.cpu.usage', {
+  description: 'CPU usage percentage',
+  unit: 'percent',
+})
+
+cpuGauge.addCallback((result) => {
+  const cpuUsage = process.cpuUsage()
+  result.observe(cpuUsage.system / 1_000_000, { core: '0' })
+})
+```
+
+## Full example
+
+```javascript
+require('dd-trace').init()
+const { metrics } = require('@opentelemetry/api')
+
+const meter = metrics.getMeter('my-service', '1.0.0')
+
+// Counters
+const requestCounter = meter.createCounter('http.requests')
+const errorCounter = meter.createCounter('http.errors')
+
+// Histogram
+const latencyHistogram = meter.createHistogram('http.latency', { unit: 'ms' })
+
+// UpDownCounter
+const activeRequests = meter.createUpDownCounter('http.active_requests')
+
+app.use((req, res, next) => {
+  const start = Date.now()
+  activeRequests.add(1)
+
+  res.on('finish', () => {
+    const duration = Date.now() - start
+    const labels = { method: req.method, status: res.statusCode }
+
+    requestCounter.add(1, labels)
+    latencyHistogram.record(duration, labels)
+    activeRequests.add(-1)
+
+    if (res.statusCode >= 500) {
+      errorCounter.add(1, labels)
+    }
+  })
+
+  next()
+})
+```
+
+## Configuration
+
+The following environment variables control OpenTelemetry metrics behavior:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DD_METRICS_OTEL_ENABLED` | `false` | Enable OpenTelemetry metrics support |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `http://localhost:4318/v1/metrics` | OTLP endpoint for metrics. Falls back to `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/metrics` |
+| `OTEL_EXPORTER_OTLP_METRICS_HEADERS` | `{}` | Headers for metrics requests (JSON format). Falls back to `OTEL_EXPORTER_OTLP_HEADERS` |
+| `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | `http/protobuf` | OTLP protocol. Options: `http/protobuf`, `http/json`. Falls back to `OTEL_EXPORTER_OTLP_PROTOCOL` |
+| `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT` | `10000` | Request timeout in ms. Falls back to `OTEL_EXPORTER_OTLP_TIMEOUT` |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `10000` | Export interval in ms |
+| `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` | `DELTA` | Aggregation temporality. Options: `CUMULATIVE`, `DELTA`, `LOWMEMORY` |
+| `OTEL_BSP_MAX_QUEUE_SIZE` | `2048` | Maximum metrics to queue before dropping |

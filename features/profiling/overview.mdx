@@ -1,0 +1,94 @@
+---
+title: "Continuous Profiler"
+description: "Collect CPU, heap, and wall-time profiles from your Node.js application continuously with Datadog's profiler."
+---
+
+The Datadog Continuous Profiler collects performance profiles from your running Node.js application and uploads them to Datadog, where you can visualise flame graphs, identify hot code paths, and correlate profiling data with traces.
+
+## Profile types
+
+The Node.js profiler collects the following profile types:
+
+<CardGroup cols={2}>
+  <Card title="Wall time" icon="clock">
+    Samples the call stack at regular intervals regardless of CPU state. Includes time spent in I/O, timers, and awaiting callbacks. Best for understanding overall latency.
+  </Card>
+  <Card title="CPU time" icon="cpu">
+    Measures time the CPU actively spends executing JavaScript. Useful for identifying compute-intensive code.
+  </Card>
+  <Card title="Heap allocation" icon="database">
+    Tracks object allocations by sampling the call stack at allocation time. Helps identify memory-hungry code paths and memory leaks.
+  </Card>
+  <Card title="Heap live objects" icon="circle-dot">
+    Snapshots live objects in the V8 heap at the end of each profiling interval. Useful for understanding memory usage patterns.
+  </Card>
+</CardGroup>
+
+<Note>
+  CPU profiling is enabled by default. Heap profiling can be enabled separately with `DD_PROFILING_HEAP_ENABLED=true`.
+</Note>
+
+## Enabling the profiler
+
+<Steps>
+  <Step title="Set the environment variable">
+    ```bash
+    DD_PROFILING_ENABLED=true node server.js
+    ```
+  </Step>
+  <Step title="Or enable programmatically">
+    Pass `profiling: true` to `tracer.init()`:
+
+    ```javascript
+    const tracer = require('dd-trace').init({
+      service: 'my-service',
+      env: 'production',
+      profiling: true,
+    })
+    ```
+  </Step>
+  <Step title="Enable heap profiling (optional)">
+    Heap profiling is disabled by default:
+
+    ```bash
+    DD_PROFILING_ENABLED=true DD_PROFILING_HEAP_ENABLED=true node server.js
+    ```
+  </Step>
+  <Step title="View profiles in Datadog">
+    Profiles appear in **APM > Continuous Profiler** within a minute or two of startup.
+  </Step>
+</Steps>
+
+## Configuration
+
+| Environment variable | Default | Description |
+|---|---|---|
+| `DD_PROFILING_ENABLED` | `false` | Enable the profiler |
+| `DD_PROFILING_CPU_ENABLED` | `true` | Enable CPU / wall-time profiling |
+| `DD_PROFILING_HEAP_ENABLED` | `false` | Enable heap allocation profiling |
+| `DD_PROFILING_WALLTIME_ENABLED` | `true` | Enable wall-time profiling |
+| `DD_PROFILING_UPLOAD_PERIOD` | `65` | Profile upload interval in seconds |
+| `DD_PROFILING_HEAP_SAMPLING_INTERVAL` | — | Heap sampling interval in bytes |
+| `DD_PROFILING_CODEHOTSPOTS_ENABLED` | `true` | Link profiles to traces (Code Hotspots) |
+| `DD_PROFILING_ENDPOINT_COLLECTION_ENABLED` | `true` | Tag profiles with endpoint information |
+| `DD_PROFILING_TIMELINE_ENABLED` | `false` | Enable timeline view in profiles |
+
+## Code Hotspots
+
+When `DD_PROFILING_CODEHOTSPOTS_ENABLED=true` (the default), the profiler links profiling data to APM traces. In the Datadog trace view, you can drill into a span and see the flame graph for exactly that span, making it easy to identify which function inside a slow request is consuming the most time.
+
+## Serverless environments
+
+On AWS Lambda (`AWS_LAMBDA_FUNCTION_NAME` is set), the profiler uses a `ServerlessProfiler` variant that adapts profile upload timing to the Lambda execution lifecycle. Enable it the same way:
+
+```bash
+DD_PROFILING_ENABLED=true
+```
+
+<Tip>
+  When running on Lambda, also set `DD_TRACE_AGENT_URL` to point to the Datadog Lambda Extension so that profiles are shipped during the Lambda execution lifecycle rather than after function return.
+</Tip>
+
+## Performance overhead
+
+The wall-time profiler uses V8's sampling-based CPU profiler, which has very low overhead (typically under 1% CPU). Heap profiling has slightly higher overhead depending on allocation rate. For most production workloads, the combined overhead of both profile types is under 2–3%.

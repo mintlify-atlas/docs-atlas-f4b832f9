@@ -1,0 +1,133 @@
+---
+title: "Migrating from v3 to v4"
+description: "Step-by-step guide for upgrading dd-trace from v3 to v4, covering all breaking changes."
+---
+
+dd-trace v4 drops support for Node.js 14, removes the `orphanable` option, drops `jest-jasmine2` support, and removes support for older Next.js versions. This guide covers all breaking changes and the steps to upgrade.
+
+## Breaking changes
+
+<Warning>
+  **Node.js 14 is no longer supported.** Node.js 14 reached end-of-life in April 2023. dd-trace v4 requires Node.js 16 or later.
+</Warning>
+
+### Node.js version requirement
+
+dd-trace v4 requires **Node.js >= 16**. If your application runs on Node.js 14, you must upgrade Node.js before upgrading dd-trace.
+
+### `orphanable` option removed
+
+The `orphanable` span option has been removed. This option was only used internally for a single integration that has since been removed and was never useful for manual instrumentation.
+
+To create a root span without a parent in manual instrumentation, pass `childOf: null` directly:
+
+```javascript
+// Before (v3) — orphanable option
+tracer.trace('web.request', { orphanable: true }, (span) => {
+  // ...
+})
+
+// After (v4) — use childOf: null instead
+tracer.trace('web.request', { childOf: null }, (span) => {
+  // Creates a root span even when a parent exists in scope
+})
+```
+
+### `jest-jasmine2` support removed
+
+The Jest integration no longer supports `jest-jasmine2` as a test runner. Jest changed its default test runner to `jest-circus` approximately two years before this removal. If your Jest configuration explicitly sets `testRunner: 'jest-jasmine2'`, you must switch to `jest-circus`.
+
+**Update your Jest configuration:**
+
+```javascript jest.config.js
+module.exports = {
+  // Before (v3)
+  // testRunner: 'jest-jasmine2',
+
+  // After (v4) — jest-circus is the default, no explicit config needed
+  // Or set it explicitly:
+  testRunner: 'jest-circus/runner',
+}
+```
+
+### Older Next.js versions no longer supported
+
+dd-trace v4 supports only **Next.js 10.2 and later**. If your application uses an older version of Next.js, you must upgrade Next.js before upgrading dd-trace.
+
+Check your Next.js version:
+
+```bash
+npm show next version
+# or
+cat package.json | grep next
+```
+
+## Upgrade steps
+
+<Steps>
+  <Step title="Upgrade Node.js to 16 or later">
+    dd-trace v4 requires Node.js 16 or later. Update your runtime before upgrading the package.
+
+    ```bash
+    node --version
+    # v16.x.x or later
+    ```
+
+    Update any `.nvmrc`, `.node-version`, Dockerfile, or CI configuration files that pin your Node.js version.
+  </Step>
+
+  <Step title="Switch from jest-jasmine2 to jest-circus (if applicable)">
+    If your Jest configuration uses `jest-jasmine2`, update it to use `jest-circus` before installing dd-trace v4.
+
+    Remove any explicit `testRunner: 'jest-jasmine2'` setting from your Jest configuration. `jest-circus` is the default and no explicit configuration is needed.
+  </Step>
+
+  <Step title="Upgrade Next.js to 10.2 or later (if applicable)">
+    If your application uses Next.js older than 10.2, upgrade it:
+
+    ```bash
+    npm install next@latest
+    ```
+  </Step>
+
+  <Step title="Remove orphanable option usage">
+    Search your codebase for any uses of the `orphanable` option and replace them with `childOf: null`:
+
+    ```bash
+    grep -r 'orphanable' .
+    ```
+
+    For each occurrence, replace with `{ childOf: null }` in your span options.
+  </Step>
+
+  <Step title="Install dd-trace v4">
+    ```bash
+    npm install dd-trace@4
+    ```
+
+    Or with yarn:
+
+    ```bash
+    yarn add dd-trace@4
+    ```
+  </Step>
+
+  <Step title="Run your test suite">
+    ```bash
+    npm test
+    ```
+  </Step>
+</Steps>
+
+## Version compatibility table
+
+| dd-trace version | Node.js requirement | Status |
+| ---------------- | ------------------- | ------ |
+| v5 (current)     | >= 18               | Current |
+| v4               | >= 16               | EOL     |
+| v3               | >= 14               | EOL     |
+| v2               | >= 12               | EOL     |
+
+<Note>
+  For any issues related to migrating, open an issue on the [dd-trace-js GitHub repository](https://github.com/DataDog/dd-trace-js) or contact [Datadog support](https://www.datadoghq.com/support/).
+</Note>

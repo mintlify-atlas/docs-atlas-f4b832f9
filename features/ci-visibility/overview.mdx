@@ -1,0 +1,148 @@
+---
+title: "CI Visibility"
+description: "Capture test results, timing, and failures from your Node.js test suites and correlate them with CI pipeline data in Datadog."
+---
+
+Datadog CI Visibility collects test results, durations, and failure information from your Node.js test runs and surfaces them in the Datadog CI Visibility product. You can track flaky tests, monitor test suite health over time, and correlate slow tests with code changes.
+
+## What CI Visibility captures
+
+<CardGroup cols={2}>
+  <Card title="Test results" icon="check-circle">
+    Pass, fail, and skip status for every test, test suite, and test session.
+  </Card>
+  <Card title="Timing" icon="clock">
+    Duration of individual tests, suites, and full CI runs, with a breakdown by module.
+  </Card>
+  <Card title="Error details" icon="x-circle">
+    Stack traces, error messages, and the first failing assertion for failed tests.
+  </Card>
+  <Card title="Flaky tests" icon="shuffle">
+    Detection of tests that alternate between passing and failing across runs. Early Flake Detection quarantines newly flaky tests automatically.
+  </Card>
+  <Card title="Test coverage" icon="layers">
+    Code coverage data correlated with test runs (when coverage instrumentation is enabled).
+  </Card>
+  <Card title="CI pipeline context" icon="git-branch">
+    Branch, commit SHA, pipeline ID, and CI provider metadata attached to every test run.
+  </Card>
+</CardGroup>
+
+## Supported test frameworks
+
+dd-trace automatically instruments the following Node.js test frameworks:
+
+- **Jest** (`jest`)
+- **Mocha** (`mocha`)
+- **Vitest** (`vitest`)
+- **Cucumber** (`@cucumber/cucumber`)
+- **Cypress** (`cypress`)
+- **Playwright** (`@playwright/test`)
+- **Selenium** (`selenium-webdriver`)
+- **NYC** (`nyc` — for coverage)
+
+## Supported CI providers
+
+CI environment variables are automatically detected for the following providers:
+
+- GitHub Actions
+- GitLab CI
+- Jenkins
+- CircleCI
+- Buildkite
+- Bitbucket Pipelines
+- Azure Pipelines
+- TeamCity
+- AppVeyor
+- Travis CI
+- AWS CodePipeline
+
+For unsupported providers, you can set `DD_GIT_COMMIT_SHA`, `DD_GIT_BRANCH`, and `DD_GIT_REPOSITORY_URL` manually.
+
+## Enabling CI Visibility
+
+<Steps>
+  <Step title="Install dd-trace">
+    ```bash
+    npm install --save-dev dd-trace
+    ```
+  </Step>
+  <Step title="Set environment variables">
+    Point the tracer at your Datadog Agent and identify your service:
+
+    ```bash
+    DD_ENV=ci \
+    DD_SERVICE=my-test-suite \
+    DD_CIVISIBILITY_ENABLED=true \
+    node --require dd-trace/ci/init jest
+    ```
+
+    The `dd-trace/ci/init` require hook configures the tracer specifically for CI test runs.
+  </Step>
+  <Step title="Or enable agentless mode">
+    If your CI environment does not have a Datadog Agent, use agentless mode to send data directly to Datadog:
+
+    ```bash
+    DD_ENV=ci \
+    DD_SERVICE=my-test-suite \
+    DD_CIVISIBILITY_AGENTLESS_ENABLED=true \
+    DD_API_KEY=<your-api-key> \
+    DD_SITE=datadoghq.com \
+    node --require dd-trace/ci/init jest
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  The `dd-trace/ci/init` require hook is the recommended way to enable CI Visibility. It automatically disables APM tracing and configures the tracer for test-only data collection.
+</Tip>
+
+## Configuration
+
+| Environment variable | Default | Description |
+|---|---|---|
+| `DD_CIVISIBILITY_ENABLED` | `false` | Enable CI Visibility |
+| `DD_CIVISIBILITY_AGENTLESS_ENABLED` | `false` | Send data directly to Datadog (no Agent required) |
+| `DD_CIVISIBILITY_ITR_ENABLED` | `true` | Enable Intelligent Test Runner (skip unaffected tests) |
+| `DD_CIVISIBILITY_LOG_LEVEL` | `warn` | Log level for CI Visibility output |
+| `DD_API_KEY` | — | Datadog API key (required for agentless mode) |
+| `DD_SITE` | `datadoghq.com` | Datadog site |
+| `DD_SERVICE` | — | Service name (test suite name) |
+| `DD_ENV` | — | Environment name (e.g., `ci`) |
+
+## Intelligent Test Runner
+
+The Intelligent Test Runner (ITR) skips tests that are not affected by a given code change, reducing CI time. When ITR is enabled, dd-trace queries Datadog for the list of relevant tests based on the current commit's diff and runs only those tests.
+
+ITR is enabled by default when CI Visibility is active. To disable it:
+
+```bash
+DD_CIVISIBILITY_ITR_ENABLED=false
+```
+
+## Early Flake Detection
+
+Early Flake Detection automatically identifies newly added tests that behave inconsistently (flaky). When a new test is detected, dd-trace runs it multiple times in the same CI job and marks it as flaky if it does not produce consistent results. This prevents flaky tests from being merged.
+
+## Flaky test management
+
+Known flaky tests can be quarantined from the Datadog UI. Quarantined tests are still executed, but their results do not block the pipeline. This gives teams time to fix flaky tests without blocking deployments.
+
+## Adding custom tags to test runs
+
+You can add custom tags to the active test span using the dd-trace public API:
+
+```javascript
+const tracer = require('dd-trace')
+
+// In a beforeEach or test setup hook
+const testSpan = tracer.scope().active()
+if (testSpan) {
+  testSpan.setTag('custom.team', 'platform')
+  testSpan.setTag('custom.feature', 'auth')
+}
+```
+
+## Manual API
+
+For advanced use cases, CI Visibility exposes a manual testing API at `dd-trace/ci/jest/manual-reporter` that lets you record test results programmatically — useful for custom test runners or test frameworks not natively supported by dd-trace.

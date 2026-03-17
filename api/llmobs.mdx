@@ -1,0 +1,456 @@
+---
+title: "LLMObs API"
+description: "The LLM Observability SDK lets you trace LLM calls, annotate spans with inputs/outputs, submit evaluations, and manage ML application context."
+---
+
+The LLMObs SDK is available as `tracer.llmobs`. It provides methods for tracing LLM operations, annotating spans, and submitting evaluation metrics.
+
+```javascript
+const tracer = require('dd-trace').init({
+  llmobs: {
+    mlApp: 'my-llm-app',
+  },
+})
+const llmobs = tracer.llmobs
+```
+
+## Properties
+
+### `enabled`
+
+Whether LLM Observability tracing is currently enabled.
+
+```typescript
+enabled: boolean
+```
+
+## Methods
+
+### `enable(options)`
+
+Enables LLM Observability tracing programmatically.
+
+```typescript
+enable(options: LLMObsEnableOptions): void
+```
+
+<ParamField path="options" type="LLMObsEnableOptions" required>
+  Enable options.
+
+  <Expandable title="LLMObsEnableOptions properties">
+    <ResponseField name="mlApp" type="string">
+      The name of your ML application. Also configurable via `DD_LLMOBS_ML_APP`.
+    </ResponseField>
+    <ResponseField name="agentlessEnabled" type="boolean">
+      Set to `true` to disable sending data that requires a Datadog Agent. Also configurable via `DD_LLMOBS_AGENTLESS_ENABLED`.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```javascript
+tracer.llmobs.enable({ mlApp: 'my-chat-app' })
+```
+
+---
+
+### `disable()`
+
+Disables LLM Observability tracing.
+
+```typescript
+disable(): void
+```
+
+```javascript
+tracer.llmobs.disable()
+```
+
+---
+
+### `trace(options, fn)`
+
+Instruments a function by automatically creating an LLMObs span that is activated on its scope.
+
+```typescript
+trace<T>(options: LLMObsNamedSpanOptions, fn: (span: Span, done: (error?: Error) => void) => T): T
+```
+
+<ParamField path="options" type="LLMObsNamedSpanOptions" required>
+  LLMObs span options.
+
+  <Expandable title="LLMObsNamedSpanOptions properties">
+    <ResponseField name="name" type="string" required>
+      The name of the traced operation.
+    </ResponseField>
+    <ResponseField name="kind" type="string" required>
+      LLM Observability span kind. One of: `agent`, `workflow`, `task`, `tool`, `retrieval`, `embedding`, `llm`.
+    </ResponseField>
+    <ResponseField name="modelName" type="string">
+      The invoked model name. Only used on `llm` and `embedding` spans.
+    </ResponseField>
+    <ResponseField name="modelProvider" type="string">
+      The model provider (e.g., `openai`). Only used on `llm` and `embedding` spans. Defaults to `custom`.
+    </ResponseField>
+    <ResponseField name="sessionId" type="string">
+      The user session ID. Required for session tracking.
+    </ResponseField>
+    <ResponseField name="mlApp" type="string">
+      ML application name. Overrides the default set at initialization.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="fn" type="Function" required>
+  The function to instrument. Receives the active `span` and an optional `done` callback.
+</ParamField>
+
+<ResponseField name="returns" type="T">
+  The return value of `fn`.
+</ResponseField>
+
+```javascript
+const response = await tracer.llmobs.trace(
+  {
+    kind: 'llm',
+    name: 'openai.chat',
+    modelName: 'gpt-4o',
+    modelProvider: 'openai',
+    sessionId: 'user-session-123',
+  },
+  async (span) => {
+    const result = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello!' }],
+    })
+
+    tracer.llmobs.annotate(span, {
+      inputData: [{ role: 'user', content: 'Hello!' }],
+      outputData: { role: 'assistant', content: result.choices[0].message.content },
+      metrics: {
+        inputTokens: result.usage.prompt_tokens,
+        outputTokens: result.usage.completion_tokens,
+        totalTokens: result.usage.total_tokens,
+      },
+    })
+
+    return result
+  }
+)
+```
+
+---
+
+### `wrap(options, fn)`
+
+Wraps a function so that an LLMObs span is created automatically each time the function is called.
+
+```typescript
+wrap<T = (...args: any[]) => any>(options: LLMObsNamelessSpanOptions, fn: T): T
+```
+
+<ParamField path="options" type="LLMObsNamelessSpanOptions" required>
+  LLMObs span options. The `name` field is optional — if omitted, the function name is used.
+</ParamField>
+
+<ParamField path="fn" type="Function" required>
+  The function to wrap.
+</ParamField>
+
+<ResponseField name="returns" type="T">
+  A wrapped function with the same signature.
+</ResponseField>
+
+```javascript
+async function callLLM(prompt) {
+  const result = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+  })
+  return result.choices[0].message.content
+}
+
+const tracedCallLLM = tracer.llmobs.wrap(
+  { kind: 'llm', modelName: 'gpt-4o', modelProvider: 'openai' },
+  callLLM
+)
+
+const response = await tracedCallLLM('What is 2 + 2?')
+```
+
+---
+
+### `annotate(options)` / `annotate(span, options)`
+
+Sets inputs, outputs, tags, metadata, and metrics on a given LLMObs span. With the exception of `tags`, this method overwrites any existing values for the provided fields.
+
+```typescript
+annotate(options: AnnotationOptions): void
+annotate(span: Span | undefined, options: AnnotationOptions): void
+```
+
+<ParamField path="span" type="Span">
+  The span to annotate. Defaults to the current active LLMObs span if not provided.
+</ParamField>
+
+<ParamField path="options" type="AnnotationOptions" required>
+  Annotation data.
+
+  <Expandable title="AnnotationOptions properties">
+    <ResponseField name="inputData" type="string | Message | Message[] | Document | Document[] | object">
+      Input data. For `llm` spans: a string or `{content, role}` message(s). For `embedding` spans: a string or `{text, ...}` object(s). For other spans: any JSON-serializable value.
+    </ResponseField>
+    <ResponseField name="outputData" type="string | Message | Message[] | Document | Document[] | object">
+      Output data. For `llm` spans: a string or `{content, role}` message. For `retrieval` spans: `{name, id, text, score}` object(s). For other spans: any JSON-serializable value.
+    </ResponseField>
+    <ResponseField name="metadata" type="object">
+      JSON-serializable key-value metadata relevant to the operation.
+    </ResponseField>
+    <ResponseField name="metrics" type="object">
+      Numeric key-value metrics, such as `{ inputTokens, outputTokens, totalTokens }`.
+    </ResponseField>
+    <ResponseField name="tags" type="object">
+      Key-value tag pairs. Tags are merged (not replaced) with existing tags.
+    </ResponseField>
+    <ResponseField name="prompt" type="Prompt">
+      Prompt template object. Only used on `llm` spans.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```javascript
+tracer.llmobs.trace({ kind: 'llm', name: 'my-llm', modelName: 'gpt-4o', modelProvider: 'openai' }, (span) => {
+  tracer.llmobs.annotate(span, {
+    inputData: [
+      { content: 'You are a helpful assistant.', role: 'system' },
+      { content: 'What is the capital of France?', role: 'user' },
+    ],
+    outputData: { content: 'Paris.', role: 'assistant' },
+    metadata: { temperature: 0.7, max_tokens: 100 },
+    tags: { environment: 'production' },
+    metrics: { inputTokens: 20, outputTokens: 5, totalTokens: 25 },
+  })
+})
+```
+
+---
+
+### `flush()`
+
+Flushes any remaining spans and evaluation metrics to LLM Observability.
+
+```typescript
+flush(): void
+```
+
+```javascript
+// At process shutdown
+process.on('beforeExit', () => {
+  tracer.llmobs.flush()
+})
+```
+
+---
+
+### `exportSpan(span?)`
+
+Returns an object containing the span ID and trace ID for the given span. Used with `submitEvaluation()`.
+
+```typescript
+exportSpan(span?: Span): ExportedLLMObsSpan
+```
+
+<ParamField path="span" type="Span">
+  The span to export. Defaults to the current active LLMObs span.
+</ParamField>
+
+<ResponseField name="returns" type="ExportedLLMObsSpan">
+  An object with `spanId` and `traceId` strings.
+</ResponseField>
+
+```javascript
+const spanContext = tracer.llmobs.exportSpan(span)
+console.log(spanContext.spanId)
+console.log(spanContext.traceId)
+```
+
+---
+
+### `submitEvaluation(spanContext, options)`
+
+Submits a custom evaluation metric for a span.
+
+```typescript
+submitEvaluation(spanContext: ExportedLLMObsSpan, options: EvaluationOptions): void
+```
+
+<ParamField path="spanContext" type="ExportedLLMObsSpan" required>
+  The exported span context from `exportSpan()`.
+</ParamField>
+
+<ParamField path="options" type="EvaluationOptions" required>
+  Evaluation metric data.
+
+  <Expandable title="EvaluationOptions properties">
+    <ResponseField name="label" type="string" required>
+      The name of the evaluation metric.
+    </ResponseField>
+    <ResponseField name="metricType" type="string" required>
+      One of: `categorical`, `score`, `boolean`, `json`.
+    </ResponseField>
+    <ResponseField name="value" type="string | number | boolean | object" required>
+      The metric value. Must match the `metricType`: string for categorical, number for score, boolean for boolean, object for json.
+    </ResponseField>
+    <ResponseField name="tags" type="object">
+      String key-value tags to attach to the metric.
+    </ResponseField>
+    <ResponseField name="mlApp" type="string">
+      ML application name override.
+    </ResponseField>
+    <ResponseField name="timestampMs" type="number">
+      Timestamp in milliseconds when the evaluation was generated.
+    </ResponseField>
+    <ResponseField name="reasoning" type="string">
+      Reasoning for the evaluation result.
+    </ResponseField>
+    <ResponseField name="assessment" type="string">
+      Pass/fail assessment. One of: `pass`, `fail`.
+    </ResponseField>
+    <ResponseField name="metadata" type="object">
+      Arbitrary JSON metadata.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```javascript
+const spanCtx = tracer.llmobs.exportSpan(span)
+
+tracer.llmobs.submitEvaluation(spanCtx, {
+  label: 'faithfulness',
+  metricType: 'score',
+  value: 0.95,
+  tags: { evaluator: 'gpt-4' },
+  reasoning: 'Response accurately reflects the source material',
+  assessment: 'pass',
+})
+```
+
+---
+
+### `annotationContext(options, fn)`
+
+Annotates all spans (including auto-instrumented spans) created within the callback with the provided context options.
+
+```typescript
+annotationContext<T>(options: AnnotationContextOptions, fn: () => T): T
+```
+
+<ParamField path="options" type="AnnotationContextOptions" required>
+  Context annotation options.
+
+  <Expandable title="AnnotationContextOptions properties">
+    <ResponseField name="tags" type="object">
+      Key-value tags to apply to all spans within the context.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Override the span name for any spans annotated within the context.
+    </ResponseField>
+    <ResponseField name="prompt" type="Prompt">
+      Prompt template to apply to `llm` spans within the context.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="T">
+  The return value of `fn`.
+</ResponseField>
+
+```javascript
+tracer.llmobs.annotationContext(
+  { tags: { session: 'abc123', user_tier: 'premium' } },
+  () => {
+    // All LLMObs spans created in here get the tags above
+    processRequest()
+  }
+)
+```
+
+---
+
+### `routingContext(options, fn)`
+
+Executes a function within a routing context that directs all LLMObs spans to a specific Datadog organization.
+
+```typescript
+routingContext<T>(options: RoutingContextOptions, fn: () => T): T
+```
+
+<ParamField path="options" type="RoutingContextOptions" required>
+  Routing context options.
+
+  <Expandable title="RoutingContextOptions properties">
+    <ResponseField name="ddApiKey" type="string" required>
+      The Datadog API key for the target organization.
+    </ResponseField>
+    <ResponseField name="ddSite" type="string">
+      The Datadog site for the target organization (e.g., `datadoghq.eu`).
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="T">
+  The return value of `fn`.
+</ResponseField>
+
+```javascript
+tracer.llmobs.routingContext(
+  { ddApiKey: 'customer-api-key', ddSite: 'datadoghq.eu' },
+  () => {
+    // Spans sent to customer's Datadog org
+    processCustomerRequest()
+  }
+)
+```
+
+---
+
+### `registerProcessor(processor)`
+
+Registers a processor function that is called on each LLMObs span before it is sent. The processor can modify the span or return `null` to drop it.
+
+```typescript
+registerProcessor(processor: (span: LLMObservabilitySpan) => LLMObservabilitySpan | null): void
+```
+
+<ParamField path="processor" type="Function" required>
+  A function receiving an `LLMObservabilitySpan`. Return the (possibly modified) span to include it, or `null` to drop it.
+</ParamField>
+
+```javascript
+tracer.llmobs.registerProcessor((span) => {
+  // Redact sensitive content from inputs
+  span.input.forEach(msg => {
+    msg.content = msg.content.replace(/\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}/g, '[REDACTED]')
+  })
+  return span
+})
+```
+
+### `deregisterProcessor()`
+
+Deregisters the currently registered processor.
+
+```typescript
+deregisterProcessor(): void
+```
+
+## Span kinds
+
+| Kind | Description |
+|------|-------------|
+| `llm` | A call to a language model. Use with `modelName` and `modelProvider`. |
+| `embedding` | A call to an embedding model. Use with `modelName` and `modelProvider`. |
+| `retrieval` | A document retrieval operation. |
+| `tool` | A tool or function call in an agentic workflow. |
+| `task` | A generic processing task. |
+| `workflow` | A multi-step workflow or pipeline. |
+| `agent` | An autonomous agent orchestrating multiple operations. |

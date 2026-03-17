@@ -1,0 +1,235 @@
+---
+title: "DogStatsD API"
+description: "The DogStatsD client lets you send custom metrics from your application to the Datadog Agent via the StatsD protocol."
+---
+
+The DogStatsD client is available as `tracer.dogstatsd`. It sends custom metrics to the Datadog Agent over UDP using the DogStatsD protocol.
+
+```javascript
+const tracer = require('dd-trace').init()
+const { dogstatsd } = tracer
+```
+
+Configure the DogStatsD agent endpoint in `TracerOptions`:
+
+```javascript
+const tracer = require('dd-trace').init({
+  dogstatsd: {
+    hostname: '127.0.0.1', // DD_DOGSTATSD_HOST
+    port: 8125,            // DD_DOGSTATSD_PORT
+  },
+})
+```
+
+## Tag format
+
+Tags can be provided as an object or an array of strings:
+
+```javascript
+// Object format (recommended)
+{ method: 'GET', status: '200', service: 'api' }
+
+// Array format
+['method:GET', 'status:200', 'service:api']
+```
+
+Tags are combined with any global tags configured in `TracerOptions.tags`.
+
+## Methods
+
+### `increment(stat, value?, tags?)`
+
+Increments a metric by the specified value.
+
+```typescript
+increment(stat: string, value?: number, tags?: Record<string, string|number> | string[]): void
+```
+
+<ParamField path="stat" type="string" required>
+  The dot-separated metric name (e.g., `http.requests`).
+</ParamField>
+
+<ParamField path="value" type="number">
+  The amount to increment by. Defaults to `1`.
+</ParamField>
+
+<ParamField path="tags" type="object | string[]">
+  Tags to attach to this metric submission.
+</ParamField>
+
+```javascript
+// Increment by 1 (default)
+tracer.dogstatsd.increment('http.requests')
+
+// Increment by a specific value with tags
+tracer.dogstatsd.increment('http.requests', 1, { method: 'GET', status: '200' })
+
+// Array tag format
+tracer.dogstatsd.increment('http.requests', 1, ['method:GET', 'status:200'])
+```
+
+---
+
+### `decrement(stat, value?, tags?)`
+
+Decrements a metric by the specified value.
+
+```typescript
+decrement(stat: string, value?: number, tags?: Record<string, string|number> | string[]): void
+```
+
+<ParamField path="stat" type="string" required>
+  The dot-separated metric name.
+</ParamField>
+
+<ParamField path="value" type="number">
+  The amount to decrement by. Defaults to `1`.
+</ParamField>
+
+<ParamField path="tags" type="object | string[]">
+  Tags to attach to this metric submission.
+</ParamField>
+
+```javascript
+tracer.dogstatsd.decrement('active.connections')
+tracer.dogstatsd.decrement('active.connections', 1, { pool: 'primary' })
+```
+
+---
+
+### `gauge(stat, value, tags?)`
+
+Sets a gauge to the specified value. A gauge represents the current value of a metric at a point in time.
+
+```typescript
+gauge(stat: string, value?: number, tags?: Record<string, string|number> | string[]): void
+```
+
+<ParamField path="stat" type="string" required>
+  The dot-separated metric name.
+</ParamField>
+
+<ParamField path="value" type="number">
+  The gauge value.
+</ParamField>
+
+<ParamField path="tags" type="object | string[]">
+  Tags to attach to this metric submission.
+</ParamField>
+
+```javascript
+tracer.dogstatsd.gauge('queue.depth', 42)
+tracer.dogstatsd.gauge('memory.usage', process.memoryUsage().heapUsed, { service: 'worker' })
+```
+
+---
+
+### `histogram(stat, value, tags?)`
+
+Records a value in a histogram. Histograms track the statistical distribution of a set of values and compute percentiles, average, max, and sum.
+
+```typescript
+histogram(stat: string, value?: number, tags?: Record<string, string|number> | string[]): void
+```
+
+<ParamField path="stat" type="string" required>
+  The dot-separated metric name.
+</ParamField>
+
+<ParamField path="value" type="number">
+  The value to record.
+</ParamField>
+
+<ParamField path="tags" type="object | string[]">
+  Tags to attach to this metric submission.
+</ParamField>
+
+```javascript
+const start = Date.now()
+await processRequest()
+const duration = Date.now() - start
+
+tracer.dogstatsd.histogram('request.duration', duration, {
+  route: '/api/users',
+  method: 'GET',
+})
+```
+
+---
+
+### `distribution(stat, value, tags?)`
+
+Records a value in a distribution metric. Distributions are similar to histograms but are aggregated globally on the Datadog backend (rather than per-host), making them ideal for distributed systems.
+
+```typescript
+distribution(stat: string, value?: number, tags?: Record<string, string|number> | string[]): void
+```
+
+<ParamField path="stat" type="string" required>
+  The dot-separated metric name.
+</ParamField>
+
+<ParamField path="value" type="number">
+  The value to record.
+</ParamField>
+
+<ParamField path="tags" type="object | string[]">
+  Tags to attach to this metric submission.
+</ParamField>
+
+```javascript
+tracer.dogstatsd.distribution('api.response_time', responseTimeMs, {
+  endpoint: '/users',
+  region: 'us-east-1',
+})
+```
+
+---
+
+### `flush()`
+
+Forces any unsent metrics to be flushed immediately.
+
+```typescript
+flush(): void
+```
+
+<Note>
+  This method is experimental and may be removed in future versions.
+</Note>
+
+```javascript
+// Flush before process shutdown
+process.on('beforeExit', () => {
+  tracer.dogstatsd.flush()
+})
+```
+
+## Full example
+
+```javascript
+const tracer = require('dd-trace').init()
+const { dogstatsd } = tracer
+
+app.use((req, res, next) => {
+  const start = Date.now()
+
+  // Track active requests
+  dogstatsd.increment('http.active_requests', 1, { method: req.method })
+
+  res.on('finish', () => {
+    const duration = Date.now() - start
+    const tags = {
+      method: req.method,
+      status: String(res.statusCode),
+      route: req.route?.path ?? 'unknown',
+    }
+
+    dogstatsd.increment('http.requests', 1, tags)
+    dogstatsd.histogram('http.response_time', duration, tags)
+    dogstatsd.decrement('http.active_requests', 1, { method: req.method })
+  })
+
+  next()
+})
+```

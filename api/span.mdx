@@ -1,0 +1,248 @@
+---
+title: "Span"
+description: "A Span represents a single unit of work within a trace. Use Span methods to add tags, set names, add links, and finish the span."
+---
+
+A `Span` represents a single operation within a trace. Spans are created by `tracer.startSpan()` or automatically by `tracer.trace()` and `tracer.wrap()`.
+
+```typescript
+import type { Span } from 'dd-trace'
+```
+
+## Methods
+
+### `setTag(key, value)`
+
+Sets a single tag on the span.
+
+```typescript
+setTag(key: string, value: any): this
+```
+
+<ParamField path="key" type="string" required>
+  The tag key.
+</ParamField>
+
+<ParamField path="value" type="any" required>
+  The tag value. Strings, numbers, and booleans are supported.
+</ParamField>
+
+<ResponseField name="returns" type="Span">
+  The `Span` instance, for chaining.
+</ResponseField>
+
+```javascript
+span.setTag('http.status_code', 200)
+span.setTag('user.id', '123')
+span.setTag('error', true)
+```
+
+<Note>
+  Setting `error: true` marks the span as an error. You can also set `error` to an `Error` instance to capture the error message and stack trace.
+</Note>
+
+---
+
+### `addTags(keyValuePairs)`
+
+Sets multiple tags on the span at once.
+
+```typescript
+addTags(keyValuePairs: { [key: string]: any }): this
+```
+
+<ParamField path="keyValuePairs" type="object" required>
+  An object of key-value tag pairs to add to the span.
+</ParamField>
+
+<ResponseField name="returns" type="Span">
+  The `Span` instance, for chaining.
+</ResponseField>
+
+```javascript
+span.addTags({
+  'http.method': 'GET',
+  'http.url': '/api/users',
+  'http.status_code': 200,
+})
+```
+
+---
+
+### `setOperationName(name)`
+
+Overrides the operation name of the span.
+
+```typescript
+setOperationName(name: string): this
+```
+
+<ParamField path="name" type="string" required>
+  The new operation name.
+</ParamField>
+
+<ResponseField name="returns" type="Span">
+  The `Span` instance, for chaining.
+</ResponseField>
+
+```javascript
+span.setOperationName('custom.operation')
+```
+
+---
+
+### `finish(finishTime?)`
+
+Finishes the span, marking the end of the operation. After calling `finish()`, no further modifications to the span should be made.
+
+```typescript
+finish(finishTime?: number): void
+```
+
+<ParamField path="finishTime" type="number">
+  An optional explicit finish time in milliseconds since epoch. Defaults to the current time.
+</ParamField>
+
+```javascript
+const span = tracer.startSpan('operation')
+// ... do work ...
+span.finish()
+
+// With explicit finish time
+span.finish(Date.now() - 100)
+```
+
+<Note>
+  When using `tracer.trace()` or `tracer.wrap()`, spans are finished automatically. Only call `finish()` manually when using `tracer.startSpan()`.
+</Note>
+
+---
+
+### `log(keyValuePairs, timestamp?)`
+
+Adds a log event to the span.
+
+```typescript
+log(keyValuePairs: { [key: string]: any }, timestamp?: number): this
+```
+
+<ParamField path="keyValuePairs" type="object" required>
+  Key-value pairs to log on the span.
+</ParamField>
+
+<ParamField path="timestamp" type="number">
+  Optional timestamp in milliseconds since epoch.
+</ParamField>
+
+<ResponseField name="returns" type="Span">
+  The `Span` instance, for chaining.
+</ResponseField>
+
+```javascript
+span.log({ event: 'error', message: 'something went wrong' })
+```
+
+---
+
+### `context()`
+
+Returns the `SpanContext` associated with this span. The context is safe to use even after the span has finished.
+
+```typescript
+context(): SpanContext
+```
+
+<ResponseField name="returns" type="SpanContext">
+  The `SpanContext` for this span, containing the trace ID and span ID.
+</ResponseField>
+
+```javascript
+const ctx = span.context()
+console.log(ctx.toTraceId()) // e.g. '1234567890abcdef'
+console.log(ctx.toSpanId())  // e.g. 'abcdef1234567890'
+
+// Use context for propagation
+tracer.inject(ctx, 'http_headers', headers)
+```
+
+---
+
+### `tracer()`
+
+Returns the `Tracer` instance that created this span.
+
+```typescript
+tracer(): Tracer
+```
+
+<ResponseField name="returns" type="Tracer">
+  The `Tracer` instance.
+</ResponseField>
+
+```javascript
+const t = span.tracer()
+const childSpan = t.startSpan('child.op', { childOf: span })
+```
+
+---
+
+### `addLink(link)`
+
+Adds a causal link to another span. Span links express relationships between spans that are not parent-child.
+
+```typescript
+// Preferred form
+addLink(link: { context: SpanContext, attributes?: Object }): void
+
+// Deprecated form
+addLink(context: SpanContext, attributes?: Object): void
+```
+
+<ParamField path="link" type="object" required>
+  A link object.
+
+  <Expandable title="link properties">
+    <ResponseField name="context" type="SpanContext" required>
+      The `SpanContext` of the span to link to.
+    </ResponseField>
+    <ResponseField name="attributes" type="object">
+      Optional key-value attributes to associate with the link.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<Note>
+  Links added after span creation do not affect the sampling decision. Add links at span creation (via `SpanOptions.links`) when possible.
+</Note>
+
+```javascript
+const producerSpan = tracer.startSpan('producer')
+producerSpan.finish()
+
+const consumerSpan = tracer.startSpan('consumer')
+consumerSpan.addLink({
+  context: producerSpan.context(),
+  attributes: { 'messaging.system': 'kafka' },
+})
+```
+
+---
+
+### `addLinks(links)`
+
+Adds multiple causal links to the span.
+
+```typescript
+addLinks(links: { context: SpanContext, attributes?: Object }[]): void
+```
+
+<ParamField path="links" type="array" required>
+  An array of link objects, each with a `context` and optional `attributes`.
+</ParamField>
+
+```javascript
+span.addLinks([
+  { context: span1.context() },
+  { context: span2.context(), attributes: { key: 'value' } },
+])
+```

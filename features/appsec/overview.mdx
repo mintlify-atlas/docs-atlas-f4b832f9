@@ -1,0 +1,247 @@
+---
+title: "Application Security (AppSec)"
+description: "Protect your Node.js application against OWASP Top 10 threats, injection attacks, and more with dd-trace AppSec."
+---
+
+Datadog Application Security Management (ASM) provides in-app threat detection and protection by instrumenting your running Node.js application. It integrates directly with the tracer to block attacks in real time — no WAF or separate proxy required.
+
+## How it works
+
+When AppSec is enabled, dd-trace integrates a Web Application Firewall (WAF) engine into your Node.js process. Every incoming HTTP request is evaluated against Datadog's managed rule set before your application code runs. If a request matches a known attack pattern, it can be blocked automatically and reported to Datadog.
+
+<CardGroup cols={2}>
+  <Card title="OWASP Top 10" icon="shield">
+    Detects and blocks SQL injection, XSS, command injection, path traversal, SSRF, and other OWASP Top 10 attacks.
+  </Card>
+  <Card title="IP & user blocking" icon="ban">
+    Block specific IP addresses or authenticated users via the Datadog UI with no redeployment needed.
+  </Card>
+  <Card title="RASP" icon="lock">
+    Runtime Application Self-Protection detects exploitation of code-level vulnerabilities in real time.
+  </Card>
+  <Card title="API Security" icon="key">
+    Automatically discovers API endpoints and collects schema information to detect shadow or sensitive APIs.
+  </Card>
+</CardGroup>
+
+## Enabling AppSec
+
+<Steps>
+  <Step title="Set the environment variable">
+    The simplest way to enable AppSec is via an environment variable:
+
+    ```bash
+    DD_APPSEC_ENABLED=true node server.js
+    ```
+  </Step>
+  <Step title="Or enable programmatically">
+    Pass `appsec: true` (or an options object) to `tracer.init()`:
+
+    ```javascript
+    const tracer = require('dd-trace').init({
+      appsec: true,
+    })
+    ```
+
+    For fine-grained control, pass an options object:
+
+    ```javascript
+    const tracer = require('dd-trace').init({
+      appsec: {
+        enabled: true,
+        rateLimit: 100,         // max attack traces per second (default: 100)
+        wafTimeout: 5000,       // WAF execution timeout in microseconds (default: 5000)
+        rasp: { enabled: true }, // enable RASP (default: false)
+      },
+    })
+    ```
+  </Step>
+  <Step title="Verify in Datadog">
+    Open **Security > Application Security** in Datadog. Detected attacks appear in the Threats explorer within seconds.
+  </Step>
+</Steps>
+
+<Note>
+  AppSec requires a Datadog Agent running alongside your application. The tracer sends security data to the Agent, which forwards it to the Datadog backend.
+</Note>
+
+## Configuration options
+
+| Option | Environment variable | Default | Description |
+|---|---|---|---|
+| `enabled` | `DD_APPSEC_ENABLED` | `false` | Enable AppSec |
+| `rules` | `DD_APPSEC_RULES` | — | Path to a custom WAF rules file |
+| `rateLimit` | `DD_APPSEC_TRACE_RATE_LIMIT` | `100` | Max attack traces per second |
+| `wafTimeout` | `DD_APPSEC_WAF_TIMEOUT` | `5000` | WAF execution timeout (microseconds) |
+| `rasp.enabled` | `DD_APPSEC_RASP_ENABLED` | `false` | Enable RASP |
+| `apiSecurity.enabled` | `DD_API_SECURITY_ENABLED` | `true` | Enable API Security schema collection |
+| `obfuscatorKeyRegex` | `DD_APPSEC_OBFUSCATION_PARAMETER_KEY_REGEXP` | — | Regex to redact sensitive parameter keys in reports |
+| `obfuscatorValueRegex` | `DD_APPSEC_OBFUSCATION_PARAMETER_VALUE_REGEXP` | — | Regex to redact sensitive parameter values in reports |
+
+## AppSec SDK
+
+The `tracer.appsec` object exposes methods for linking authenticated users to traces, checking blocks, and tracking security-relevant events.
+
+### setUser(user)
+
+Links an authenticated user to the current trace. Call this after a user successfully authenticates so that AppSec can correlate requests with user identities for user-blocking rules.
+
+```javascript
+const tracer = require('dd-trace')
+
+app.use((req, res, next) => {
+  if (req.user) {
+    tracer.appsec.setUser({
+      id: req.user.id,
+      email: req.user.email,
+      name: req.user.displayName,
+      role: req.user.role,
+    })
+  }
+  next()
+})
+```
+
+The `User` object accepts the following fields:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | `string` | Yes | Unique user identifier |
+| `email` | `string` | No | User email address |
+| `name` | `string` | No | Display name |
+| `session_id` | `string` | No | Session identifier |
+| `role` | `string` | No | User role |
+| `scope` | `string` | No | OAuth scopes or SAML assertions |
+
+### isUserBlocked(user)
+
+Checks if the given user matches any active user-blocking rules in Datadog. Returns `true` if the user should be blocked. If no user is linked to the trace yet, `setUser` is called internally.
+
+```javascript
+app.post('/login', async (req, res) => {
+  const user = await authenticate(req.body)
+
+  if (tracer.appsec.isUserBlocked(user)) {
+    tracer.appsec.blockRequest(req, res)
+    return
+  }
+
+  // proceed with authenticated session
+})
+```
+
+### blockRequest(req?, res?)
+
+Sends a blocking response to the client based on the request's `Accept` header (JSON or HTML) and ends the response. Returns `true` if blocking was successful.
+
+<Warning>
+  Stop processing the request immediately after calling `blockRequest()`. The response has already been sent.
+</Warning>
+
+```javascript
+if (tracer.appsec.isUserBlocked(user)) {
+  tracer.appsec.blockRequest(req, res)
+  return // stop processing
+}
+```
+
+If `req` and `res` are omitted, the method uses the request objects from the current async context.
+
+### trackUserLoginSuccessEvent(user, metadata?) — deprecated
+
+<Warning>
+  Deprecated. Use `tracer.appsec.eventTrackingV2.trackUserLoginSuccess()` instead.
+</Warning>
+
+Links a successful login event to the current trace.
+
+```javascript
+tracer.appsec.trackUserLoginSuccessEvent(
+  { id: 'user-123', email: 'alice@example.com' },
+  { custom_field: 'value' }
+)
+```
+
+### trackUserLoginFailureEvent(userId, exists, metadata?) — deprecated
+
+<Warning>
+  Deprecated. Use `tracer.appsec.eventTrackingV2.trackUserLoginFailure()` instead.
+</Warning>
+
+### eventTrackingV2
+
+The `tracer.appsec.eventTrackingV2` object provides the current recommended API for tracking login events.
+
+**trackUserLoginSuccess(login, user?, metadata?)**
+
+```javascript
+// Login successful
+tracer.appsec.eventTrackingV2.trackUserLoginSuccess(
+  'alice@example.com',      // login key (username, email, etc.)
+  { id: 'user-123' },       // optional user object
+  { provider: 'google' }    // optional metadata
+)
+```
+
+**trackUserLoginFailure(login, exists, metadata?)**
+
+```javascript
+// Login failed — user exists but wrong password
+tracer.appsec.eventTrackingV2.trackUserLoginFailure(
+  'alice@example.com', // login key
+  true,                // whether the user exists
+  { reason: 'bad_password' }
+)
+
+// Login failed — unknown user
+tracer.appsec.eventTrackingV2.trackUserLoginFailure(
+  'unknown@example.com',
+  false
+)
+```
+
+### trackCustomEvent(eventName, metadata?)
+
+Links any custom business-logic event to the current trace. Useful for tracking suspicious activity such as password resets, account modifications, or high-value transactions.
+
+```javascript
+tracer.appsec.trackCustomEvent('payment.high_value', {
+  amount: 9999,
+  currency: 'USD',
+  userId: req.user.id,
+})
+```
+
+## Supported frameworks
+
+AppSec supports all major Node.js HTTP frameworks that dd-trace instruments, including:
+
+- Express
+- Fastify
+- Hapi
+- Koa
+- NestJS (via Express or Fastify adapter)
+- Next.js
+- Restify
+- Connect
+
+## Blocking response templates
+
+By default, dd-trace returns a built-in HTML or JSON response when blocking a request. You can supply custom templates:
+
+```javascript
+tracer.init({
+  appsec: {
+    enabled: true,
+    blockedTemplateHtml: '/path/to/blocked.html',
+    blockedTemplateJson: '/path/to/blocked.json',
+  },
+})
+```
+
+Or via environment variables:
+
+```bash
+DD_APPSEC_HTTP_BLOCKED_TEMPLATE_HTML=/path/to/blocked.html
+DD_APPSEC_HTTP_BLOCKED_TEMPLATE_JSON=/path/to/blocked.json
+```

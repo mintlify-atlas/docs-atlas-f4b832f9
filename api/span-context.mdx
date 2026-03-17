@@ -1,0 +1,98 @@
+---
+title: "SpanContext"
+description: "SpanContext holds the state needed to identify and propagate a span across process boundaries, including trace ID, span ID, and sampling information."
+---
+
+`SpanContext` represents the serializable portion of a `Span`. It carries the trace ID, span ID, and baggage that must be propagated across process boundaries. Obtain a `SpanContext` by calling `span.context()`.
+
+```typescript
+import type { SpanContext } from 'dd-trace'
+
+const ctx: SpanContext = span.context()
+```
+
+The `SpanContext` is safe to use after the parent span has finished.
+
+## Methods
+
+### `toTraceId()`
+
+Returns the string representation of the trace ID.
+
+```typescript
+toTraceId(): string
+```
+
+<ResponseField name="returns" type="string">
+  The trace ID as a hex string.
+</ResponseField>
+
+```javascript
+const traceId = span.context().toTraceId()
+console.log(traceId) // e.g. '1234567890abcdef1234567890abcdef'
+```
+
+---
+
+### `toSpanId()`
+
+Returns the string representation of the span ID.
+
+```typescript
+toSpanId(): string
+```
+
+<ResponseField name="returns" type="string">
+  The span ID as a hex string.
+</ResponseField>
+
+```javascript
+const spanId = span.context().toSpanId()
+console.log(spanId) // e.g. 'abcdef1234567890'
+```
+
+---
+
+### `toTraceparent()`
+
+Returns the W3C `traceparent` header string representation of this context. This is used for Database Monitoring (DBM) integration.
+
+```typescript
+toTraceparent(): string
+```
+
+<ResponseField name="returns" type="string">
+  A W3C traceparent string in the format `00-<traceId>-<spanId>-<flags>`.
+</ResponseField>
+
+```javascript
+const traceparent = span.context().toTraceparent()
+console.log(traceparent)
+// e.g. '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'
+```
+
+---
+
+## Context propagation
+
+Use `tracer.inject()` and `tracer.extract()` to propagate `SpanContext` across service boundaries:
+
+```javascript
+// Producer service: inject context into outgoing headers
+const headers = {}
+tracer.inject(span.context(), 'http_headers', headers)
+await fetch('https://service-b/api', { headers })
+
+// Consumer service: extract context from incoming headers
+app.use((req, res, next) => {
+  const parentContext = tracer.extract('http_headers', req.headers)
+  const span = tracer.startSpan('http.request', { childOf: parentContext })
+  // ...
+})
+```
+
+## Internal properties
+
+The `SpanContext` interface extends the OpenTracing `SpanContext`. The internal `_traceId` and `_spanId` fields are implementation details and should not be relied upon directly — use `toTraceId()` and `toSpanId()` instead.
+
+For OpenTelemetry compatibility, the `tracer.opentelemetry` namespace provides its own `SpanContext` interface with `traceId`, `spanId`, `traceFlags`, and `traceState` fields conforming to the OTel spec. See [OpenTelemetry Tracing](/api/opentelemetry/tracing).

@@ -1,0 +1,144 @@
+---
+title: "Scope Manager"
+description: "Use the scope manager to propagate span context across asynchronous boundaries."
+---
+
+The scope manager provides explicit control over which span is active in any given execution context. In most cases you do not need to use it directly—`tracer.trace()` activates the span automatically. Use the scope manager only for advanced scenarios where the default async context propagation breaks down (e.g., custom timer queues, event emitters, or third-party async schedulers).
+
+Access the scope manager via:
+
+```javascript
+const scope = tracer.scope()
+```
+
+## `scope.active()`
+
+Returns the active `Span` in the current execution context, or `null` if there is none.
+
+```typescript
+scope.active(): Span | null
+```
+
+```javascript
+const tracer = require('dd-trace').init()
+const scope = tracer.scope()
+
+const span = scope.active()
+if (span) {
+  span.setTag('custom.tag', 'value')
+}
+```
+
+## `scope.activate(span, fn)`
+
+Activates a span for the duration of the provided function. All code executed synchronously or asynchronously from within `fn`—including `setTimeout`, `setInterval`, and promise continuations—will see `span` as the active span.
+
+```typescript
+scope.activate<T>(span: Span, fn: (...args: any[]) => T): T
+```
+
+```javascript
+const tracer = require('dd-trace').init()
+const scope = tracer.scope()
+const log = console.log
+
+const requestSpan = tracer.startSpan('web.request')
+const promise = Promise.resolve()
+
+scope.activate(requestSpan, () => {
+  log(scope.active()) // requestSpan because in new scope
+
+  someFunction()      // requestSpan because called in scope
+
+  setTimeout(() => {
+    log(scope.active()) // requestSpan because setTimeout called in scope
+  })
+
+  promise.then(() => {
+    log(scope.active()) // requestSpan because then() called in scope
+  })
+})
+
+function someFunction () {
+  log(scope.active())
+}
+
+log(scope.active())   // null
+someFunction()        // null because called outside the scope
+```
+
+The return value of `fn` is forwarded as the return value of `scope.activate()`.
+
+## `scope.bind(target, [span])`
+
+Binds a function or promise to a specific span (or to the currently active span if no span is provided). The binding is permanent—the bound function always runs in the context of that span regardless of when or where it is called.
+
+```typescript
+scope.bind<T extends (...args: any[]) => void>(fn: T, span?: Span | null): T
+scope.bind<T>(fn: Promise<T>, span?: Span | null): Promise<T>
+```
+
+**Behavior by argument:**
+
+| `span` argument | Result |
+|---|---|
+| A `Span` instance | Function is always bound to that span. |
+| Omitted / `undefined` | Function is bound to the span active at the time `bind()` is called. |
+| `null` | Function is explicitly bound to no span. |
+
+```javascript
+const tracer = require('dd-trace').init()
+const scope = tracer.scope()
+const log = console.log
+
+const outerSpan = tracer.startSpan('web.request')
+
+scope.activate(outerSpan, () => {
+  const innerSpan = tracer.startSpan('web.middleware')
+
+  const boundToInner = scope.bind(() => {
+    log(scope.active())
+  }, innerSpan)
+
+  const boundToOuter = scope.bind(() => {
+    log(scope.active())
+  })
+
+  boundToInner() // innerSpan because explicitly bound
+  boundToOuter() // outerSpan because implicitly bound at bind() call time
+})
+```
+
+## When to use the scope manager directly
+
+Use `scope.activate()` or `scope.bind()` when:
+
+- You maintain an internal queue of callbacks and execute them on a timer (the scope from when the callback was enqueued needs to be preserved).
+- You use an event emitter whose listeners are called outside the original async context.
+- You use a custom async scheduler that does not integrate with Node.js `AsyncLocalStorage`.
+
+<Note>
+  `tracer.trace()` calls `scope.activate()` internally. If you use `tracer.trace()`, the span is already active for all code inside the callback—no additional scope management is needed.
+</Note>
+
+## Example: preserving context across an event emitter
+
+```javascript
+const tracer = require('dd-trace').init()
+const scope = tracer.scope()
+const EventEmitter = require('events')
+
+const emitter = new EventEmitter()
+
+tracer.trace('web.request', (span) => {
+  // Bind the listener to the current span before registering it
+  emitter.on('data', scope.bind((chunk) => {
+    // scope.active() === span here, even if emitter fires outside this callback
+    span.setTag('data.length', chunk.length)
+  }))
+})
+
+// Even though this fires outside the tracer.trace callback, the bound
+// listener still sees the correct span.
+emitter.emit('data', Buffer.alloc(256))
+```

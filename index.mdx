@@ -1,97 +1,111 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "dd-trace: Node.js APM Tracer"
+description: "Datadog's official APM tracing client for Node.js. Automatically instrument 100+ libraries, trace distributed systems, and gain full observability into your applications."
 ---
 
-## Setting up
+## The fastest path to observability
 
-Get your documentation site up and running in minutes.
+`dd-trace` is Datadog's APM client library for Node.js. Install it in your application to capture traces, metrics, logs, and more — then visualize everything in Datadog.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running in under 5 minutes with automatic instrumentation.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Installation" icon="download" href="/installation/nodejs">
+    Install dd-trace and configure it for your Node.js environment.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="API Reference" icon="code" href="/api/tracer">
+    Explore the full Tracer API for manual instrumentation.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Integrations" icon="plug" href="/instrumentation/plugins-overview">
+    Browse 100+ supported frameworks, databases, and services.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What dd-trace does
 
-Everything you need to create world-class documentation.
+`dd-trace` captures APM data from your Node.js application and sends it to the Datadog Agent, which aggregates and forwards it to Datadog's backend for visualization, alerting, and analysis.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={3}>
+  <Card title="Distributed Tracing" icon="diagram-project">
+    Trace requests across services with automatic context propagation.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Auto-Instrumentation" icon="wand-magic-sparkles">
+    100+ plugins for Express, Fastify, PostgreSQL, Redis, and more — zero code changes.
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Application Security" icon="shield-halved">
+    Detect and block attacks in real time with AppSec and IAST.
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="Continuous Profiling" icon="gauge-high">
+    Profile CPU, memory, and wall time in production without overhead.
   </Card>
-</Columns>
+  <Card title="LLM Observability" icon="brain">
+    Monitor AI/LLM calls with the LLMObs SDK for OpenAI, Anthropic, and more.
+  </Card>
+  <Card title="CI Visibility" icon="flask">
+    Track test results, detect flaky tests, and optimize CI pipelines.
+  </Card>
+</CardGroup>
 
-## Need inspiration?
+## Supported Node.js versions
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+| Release Line | Node.js | Status |
+|---|---|---|
+| `v5` (current) | `>= 18` | **Active** |
+| `v4` | `>= 16` | EOL |
+| `v3` | `>= 14` | EOL |
+| `v2` | `>= 12` | EOL |
+
+<Note>
+  We recommend using the latest `v5` release line. Node.js 18+ is required.
+</Note>
+
+## Quick install
+
+<CodeGroup>
+
+```bash npm
+npm install dd-trace
+```
+
+```bash yarn
+yarn add dd-trace
+```
+
+```bash pnpm
+pnpm add dd-trace
+```
+
+</CodeGroup>
+
+Then initialize the tracer **before** importing any other modules:
+
+```javascript server.js
+// Must be the very first import
+require('dd-trace').init()
+
+// Now import your application code
+const express = require('express')
+const app = express()
+```
+
+<Tip>
+  For ESM applications, use the `--import dd-trace/register.js` flag instead. See the [ESM installation guide](/installation/esm).
+</Tip>
+
+## Explore the docs
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" icon="book-open" href="/introduction">
+    Learn about dd-trace architecture and core concepts.
+  </Card>
+  <Card title="Manual Instrumentation" icon="pen-to-square" href="/instrumentation/manual/tracing">
+    Create custom spans and traces for your business logic.
+  </Card>
+  <Card title="Configuration Reference" icon="sliders" href="/configuration/options">
+    All initialization options and environment variables.
+  </Card>
+  <Card title="Migration Guide" icon="arrow-right-arrow-left" href="/guides/migrating-v4-to-v5">
+    Upgrade from v4 to v5 with the migration guide.
+  </Card>
+</CardGroup>

@@ -1,0 +1,144 @@
+---
+title: "Bundling with esbuild and webpack"
+description: "How to use dd-trace with application bundlers. Includes the official datadog-esbuild plugin and caveats for other bundlers."
+---
+
+## Overview
+
+Bundling Node.js applications with tools like esbuild or webpack requires special handling for dd-trace. The tracer uses dynamic `require()` calls and diagnostic channels to instrument third-party packages at runtime. Bundlers that inline all dependencies break this mechanism.
+
+## esbuild
+
+Datadog provides an official esbuild plugin: `packages/datadog-esbuild` (published as part of the `dd-trace` package).
+
+### Install
+
+The esbuild plugin is included with `dd-trace`. You only need esbuild itself:
+
+```bash npm
+npm install --save-dev esbuild
+```
+
+### Configure the plugin
+
+```javascript build.mjs
+import * as esbuild from 'esbuild'
+import ddPlugin from 'dd-trace/esbuild'
+
+await esbuild.build({
+  entryPoints: ['src/server.js'],
+  bundle: true,
+  platform: 'node',
+  outfile: 'dist/server.js',
+  plugins: [ddPlugin],
+})
+```
+
+Or with CommonJS:
+
+```javascript build.js
+const esbuild = require('esbuild')
+const ddPlugin = require('dd-trace/esbuild')
+
+esbuild.build({
+  entryPoints: ['src/server.js'],
+  bundle: true,
+  platform: 'node',
+  outfile: 'dist/server.js',
+  plugins: [ddPlugin.setup ? [ddPlugin] : [{ name: 'datadog-esbuild', setup: ddPlugin.setup }]],
+})
+```
+
+### What the plugin does
+
+The `datadog-esbuild` plugin:
+
+1. Intercepts the resolution of all modules that dd-trace instruments (Express, pg, Redis, etc.)
+2. Wraps each module file so that a `dd-trace:bundler:load` diagnostic channel event is published when the module is loaded at runtime, allowing dd-trace to apply its instrumentation.
+3. Adds a banner to the bundle that injects git metadata (`DD_GIT_REPOSITORY_URL`, `DD_GIT_COMMIT_SHA`) from the build environment.
+4. Handles ESM output (`.mjs` / `format: 'esm'`) by generating ESM-compatible interop wrappers.
+
+### Minification
+
+<Warning>
+Using `--minify` without `--keep-names` will throw an error and refuse to bundle. The tracer relies on function names for instrumentation.
+
+If you need minification, you must pass `keepNames: true`:
+
+```javascript
+await esbuild.build({
+  // ...
+  minify: true,
+  keepNames: true,
+  plugins: [ddPlugin],
+})
+```
+</Warning>
+
+### IAST support
+
+To enable IAST (Interactive Application Security Testing) with esbuild, set `DD_IAST_ENABLED=true` before running your build script. The plugin will automatically apply code rewriting to application files.
+
+```bash
+DD_IAST_ENABLED=true node build.js
+```
+
+### ESM bundle output
+
+The plugin supports ESM output format. When building to ESM, it injects a banner that provides `require`, `__filename`, and `__dirname` globals needed by the instrumentation:
+
+```javascript
+// Automatically injected banner for ESM builds:
+import { createRequire as $dd_createRequire } from 'module';
+import { fileURLToPath as $dd_fileURLToPath } from 'url';
+import { dirname as $dd_dirname } from 'path';
+globalThis.require ??= $dd_createRequire(import.meta.url);
+globalThis.__filename ??= $dd_fileURLToPath(import.meta.url);
+globalThis.__dirname ??= $dd_dirname(globalThis.__filename);
+```
+
+## webpack
+
+Datadog does not provide an official webpack plugin. The recommended approach is to mark `dd-trace` as external so webpack does not bundle it:
+
+```javascript webpack.config.js
+module.exports = {
+  target: 'node',
+  externals: {
+    'dd-trace': 'commonjs dd-trace',
+  },
+  // ...
+}
+```
+
+This keeps `dd-trace` and all its instrumented packages in `node_modules` and requires them at runtime rather than bundling them.
+
+<Note>
+Alternatively, mark all `node_modules` as external using the `webpack-node-externals` package:
+
+```javascript webpack.config.js
+const nodeExternals = require('webpack-node-externals')
+
+module.exports = {
+  target: 'node',
+  externals: [nodeExternals()],
+}
+```
+</Note>
+
+## General bundling caveats
+
+<AccordionGroup>
+  <Accordion title="Dynamic requires">
+    dd-trace uses dynamic `require()` calls to load instrumented packages lazily. Many bundlers replace these with static requires or remove them, which breaks instrumentation. Always use the esbuild plugin or mark dd-trace as external.
+  </Accordion>
+  <Accordion title="Diagnostic channels">
+    The instrumentation system relies on Node.js diagnostic channels (`node:diagnostics_channel`). This works correctly at runtime but requires that the instrumented packages are loaded through the same `require` function that dd-trace has patched. Bundled code that inlines dependencies breaks this.
+  </Accordion>
+  <Accordion title="ESM interop">
+    When building ESM output, modules that use `require()` internally need CJS interop. The esbuild plugin handles this, but other bundlers may not.
+  </Accordion>
+  <Accordion title="Source maps">
+    When `sourcemap` is enabled in esbuild, the IAST code rewriter uses source maps to report accurate file locations. Pass `sourcemap: true` (or `'inline'` or `'both'`) in your esbuild config when using IAST.
+  </Accordion>
+</AccordionGroup>

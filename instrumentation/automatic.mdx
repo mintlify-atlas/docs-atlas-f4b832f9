@@ -1,0 +1,131 @@
+---
+title: "Automatic Instrumentation"
+description: "How dd-trace automatically instruments supported Node.js libraries using the plugin system."
+---
+
+dd-trace provides out-of-the-box instrumentation for many popular frameworks and libraries through a plugin system. By default, all built-in plugins are enabled and activate automatically when you `require` a supported library after calling `tracer.init()`.
+
+<Warning>
+  `tracer.init()` must be called **before** importing any other modules. Place it at the very top of your application entry point.
+</Warning>
+
+## How the plugin system works
+
+When your application requires a supported library, dd-trace intercepts the `require` call and wraps the relevant functions with tracing logic. No code changes to your application are needed beyond the initial `tracer.init()` call.
+
+```javascript
+// Must be first
+const tracer = require('dd-trace').init()
+
+// All subsequent requires are automatically instrumented
+const express = require('express')
+const pg = require('pg')
+const redis = require('redis')
+```
+
+Each supported library maps to one or more plugin packages under `packages/datadog-plugin-*/`. The plugin is loaded lazily the first time the corresponding npm package is required.
+
+## Disabling specific plugins
+
+All plugins are enabled by default. Pass `false` to `tracer.use()` to disable a specific plugin:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+// Disable the express plugin entirely
+tracer.use('express', false)
+```
+
+To disable **all** built-in plugins and opt in selectively, set `plugins: false` in `init()`:
+
+```javascript
+const tracer = require('dd-trace').init({ plugins: false })
+
+// Re-enable only what you need
+tracer.use('express')
+tracer.use('pg', { service: 'pg-cluster' })
+```
+
+## Configuring plugins with `tracer.use()`
+
+Use `tracer.use(pluginName, config)` to enable and configure a plugin at runtime. Configuration applied here overrides the defaults.
+
+```javascript
+const tracer = require('dd-trace').init()
+
+// Configure the PostgreSQL plugin with a custom service name
+tracer.use('pg', {
+  service: 'pg-cluster'
+})
+```
+
+The `tracer.use()` method is chainable and returns the tracer instance:
+
+```javascript
+const tracer = require('dd-trace')
+  .init()
+  .use('pg', { service: 'pg-primary' })
+  .use('redis', { allowlist: ['get', 'set'] })
+```
+
+### Common plugin options
+
+All plugins accept these base options:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Enable or disable the plugin. |
+| `service` | `string` | — | Override the service name for spans created by this plugin. |
+| `measured` | `boolean` | — | Whether to measure the span for metrics. |
+
+Web framework plugins additionally support:
+
+| Option | Type | Description |
+|---|---|---|
+| `blocklist` | `string \| RegExp \| Function \| Array` | Paths that should not be instrumented. |
+| `allowlist` | `string \| RegExp \| Function \| Array` | Paths that should be instrumented (all others are skipped). |
+| `headers` | `string[]` | Request/response headers to capture as span tags. |
+| `validateStatus` | `(code: number) => boolean` | Callback to determine if a status code is an error. |
+| `hooks.request` | `(span, req, res) => void` | Hook called just before the request span finishes. |
+| `middleware` | `boolean` | Whether to create spans for individual middleware functions. |
+
+## Span hooks
+
+Web framework plugins support span hooks that let you add custom tags to spans created by the plugin:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('express', {
+  hooks: {
+    request: (span, req, res) => {
+      span.setTag('customer.id', req.query.id)
+    }
+  }
+})
+```
+
+The hook receives the active span plus any contextual objects (request, response) relevant to the integration. Hooks are currently supported for web framework plugins.
+
+## Supported plugin categories
+
+<CardGroup cols={2}>
+  <Card title="Web Frameworks" icon="globe" href="/integrations/web-frameworks">
+    Express, Fastify, Koa, Hapi, Next.js, Hono, Restify, Connect, Moleculer
+  </Card>
+  <Card title="Databases" icon="database" href="/integrations/databases">
+    PostgreSQL, MySQL, MongoDB, Redis, Elasticsearch, Cassandra, and more
+  </Card>
+  <Card title="Messaging" icon="envelope" href="/integrations/messaging">
+    Kafka, RabbitMQ, BullMQ, Google Cloud Pub/Sub, AWS SQS/SNS, Azure
+  </Card>
+  <Card title="AI/ML" icon="brain" href="/integrations/ai-ml">
+    OpenAI, Anthropic, LangChain, LangGraph, Vertex AI, Google GenAI
+  </Card>
+  <Card title="Testing" icon="flask" href="/integrations/testing">
+    Jest, Mocha, Cucumber, Cypress, Playwright, Vitest, Selenium
+  </Card>
+  <Card title="All plugins" icon="list" href="/instrumentation/plugins-overview">
+    Complete categorized list of all 100+ supported plugins
+  </Card>
+</CardGroup>

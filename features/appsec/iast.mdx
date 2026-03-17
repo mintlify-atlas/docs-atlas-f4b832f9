@@ -1,0 +1,125 @@
+---
+title: "IAST: Code-Level Vulnerability Detection"
+description: "Detect exploitable code vulnerabilities in your running Node.js application with Datadog IAST's taint-tracking engine."
+---
+
+Interactive Application Security Testing (IAST) detects code-level vulnerabilities in your running application. Unlike SAST (static analysis) or DAST (external scanning), IAST instruments the application at runtime using taint tracking — following untrusted data from its entry point through your code to detect when it reaches a sensitive sink without proper sanitisation.
+
+## How taint tracking works
+
+When IAST is enabled, dd-trace marks data entering the application from external sources (HTTP request parameters, headers, cookies, database rows, environment variables, etc.) as *tainted*. As this data flows through your code, IAST tracks it. If tainted data reaches a security-sensitive operation — such as a SQL query, file path construction, or command execution — without being adequately sanitised, a vulnerability is reported.
+
+Because IAST runs inside the real application process with real traffic, it produces low false-positive rates and can pinpoint the exact line of code responsible for a vulnerability.
+
+## Enabling IAST
+
+<Steps>
+  <Step title="Set the environment variable">
+    ```bash
+    DD_IAST_ENABLED=true node server.js
+    ```
+  </Step>
+  <Step title="Or enable programmatically">
+    ```javascript
+    const tracer = require('dd-trace').init({
+      iast: true,
+    })
+    ```
+
+    Or with detailed options:
+
+    ```javascript
+    const tracer = require('dd-trace').init({
+      iast: {
+        enabled: true,
+        requestSampling: 30,    // percentage of requests to analyse (default: 30)
+        maxConcurrentRequests: 2, // max concurrent analyses (default: 2)
+      },
+    })
+    ```
+  </Step>
+  <Step title="Check Datadog for results">
+    Detected vulnerabilities appear in **Security > Code Security** in Datadog, grouped by vulnerability type and file location.
+  </Step>
+</Steps>
+
+<Note>
+  IAST uses a sampling mechanism (`requestSampling`) to limit performance overhead. Not every request is fully analysed. Increase `requestSampling` in development or staging for more thorough scanning.
+</Note>
+
+## Detected vulnerability types
+
+<CardGroup cols={2}>
+  <Card title="SQL Injection" icon="database">
+    Tainted input used directly in SQL queries without parameterisation.
+  </Card>
+  <Card title="Command Injection" icon="terminal">
+    Tainted input passed to `child_process.exec`, `spawn`, or similar APIs.
+  </Card>
+  <Card title="Path Traversal" icon="folder-open">
+    Tainted input used to construct file system paths, enabling directory traversal.
+  </Card>
+  <Card title="SSRF" icon="globe">
+    Tainted input used as a URL in outbound HTTP calls.
+  </Card>
+  <Card title="NoSQL Injection" icon="database">
+    Tainted input in MongoDB or other NoSQL query objects.
+  </Card>
+  <Card title="LDAP Injection" icon="users">
+    Tainted input in LDAP query filters.
+  </Card>
+  <Card title="XSS (Reflected)" icon="code">
+    Tainted input rendered in HTML responses without escaping.
+  </Card>
+  <Card title="Code Injection" icon="braces">
+    Tainted input passed to `eval()` or `Function()` constructors.
+  </Card>
+  <Card title="Header Injection" icon="arrow-right">
+    Tainted data set in HTTP response headers.
+  </Card>
+  <Card title="Unvalidated Redirect" icon="corner-up-right">
+    Tainted input used as a redirect URL.
+  </Card>
+  <Card title="Weak Cipher / Hash" icon="lock-open">
+    Use of deprecated cryptographic algorithms such as MD5 or DES.
+  </Card>
+  <Card title="Hardcoded Secrets" icon="key">
+    API keys, passwords, or tokens detected in source code.
+  </Card>
+</CardGroup>
+
+## Configuration options
+
+| Option | Environment variable | Default | Description |
+|---|---|---|---|
+| `enabled` | `DD_IAST_ENABLED` | `false` | Enable IAST |
+| `requestSampling` | `DD_IAST_REQUEST_SAMPLING` | `30` | Percentage of requests to analyse (0–100) |
+| `maxConcurrentRequests` | `DD_IAST_MAX_CONCURRENT_REQUESTS` | `2` | Maximum concurrent IAST analyses |
+| `maxContextOperations` | `DD_IAST_MAX_CONTEXT_OPERATIONS` | `2` | Max vulnerabilities detected per request |
+| `deduplicationEnabled` | `DD_IAST_DEDUPLICATION_ENABLED` | `true` | Deduplicate identical vulnerability reports |
+| `redactionEnabled` | `DD_IAST_REDACTION_ENABLED` | `true` | Redact sensitive values in vulnerability reports |
+| `redactionNamePattern` | `DD_IAST_REDACTION_NAME_PATTERN` | — | Regex to redact sensitive source names |
+| `redactionValuePattern` | `DD_IAST_REDACTION_VALUE_PATTERN` | — | Regex to redact sensitive source values |
+| `dbRowsToTaint` | `DD_IAST_DB_ROWS_TO_TAINT` | `1` | Number of database rows to taint per query |
+| `stackTrace.enabled` | `DD_IAST_STACK_TRACE_ENABLED` | `true` | Include stack traces in vulnerability reports |
+| `telemetryVerbosity` | `DD_IAST_TELEMETRY_VERBOSITY` | `INFORMATION` | Telemetry verbosity level |
+
+## Security controls
+
+If your application uses custom sanitisation functions that IAST does not recognise, you can declare them as security controls so that taint tracking stops at those functions:
+
+```bash
+DD_IAST_SECURITY_CONTROLS_CONFIGURATION="SANITIZER:SQL:my-module:sanitizeSql;INPUT_VALIDATOR:COMMAND_INJECTION:my-module:validateInput"
+```
+
+The format is: `CONTROL_TYPE:VULNERABILITY_TYPE:module:function`.
+
+Valid control types are `SANITIZER` and `INPUT_VALIDATOR`.
+
+<Warning>
+  The `securityControlsConfiguration` programmatic option is not supported when your application uses ES Modules (ESM). Use the `DD_IAST_SECURITY_CONTROLS_CONFIGURATION` environment variable instead.
+</Warning>
+
+## Performance impact
+
+IAST adds overhead proportional to the `requestSampling` percentage and `maxConcurrentRequests` value. With the defaults (30% sampling, 2 concurrent), typical overhead in production is under 5% CPU and a few milliseconds of added latency on analysed requests. In development, you can safely raise sampling to 100%.

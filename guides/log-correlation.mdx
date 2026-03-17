@@ -1,0 +1,181 @@
+---
+title: "Log Correlation"
+description: "How to correlate application logs with traces in Datadog using automatic or manual log injection."
+---
+
+Log correlation links your log records to the trace that was active when the log was emitted. In Datadog, this lets you jump directly from a log entry to the full distributed trace, and vice versa.
+
+## How log correlation works
+
+dd-trace injects trace identifiers into log records as structured fields:
+
+- `dd.trace_id` — The current trace ID
+- `dd.span_id` — The current span ID
+- `dd.service` — The service name
+- `dd.env` — The environment
+- `dd.version` — The application version
+
+The Datadog log pipeline uses these fields to correlate logs with traces when both are forwarded to Datadog.
+
+## Automatic log injection
+
+For supported logging libraries (pino, bunyan, winston), dd-trace can inject trace context automatically. Enable it with the `DD_LOGS_INJECTION` environment variable or the `logInjection` init option.
+
+<Tabs>
+  <Tab title="Environment variable">
+    ```bash
+    DD_LOGS_INJECTION=true node app.js
+    ```
+  </Tab>
+  <Tab title="Programmatic">
+    ```javascript
+    const tracer = require('dd-trace').init({
+      logInjection: true
+    })
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  `require('dd-trace').init()` must be called **before** importing your logging library. Automatic injection patches the logger at import time.
+</Warning>
+
+With automatic injection enabled, trace fields are added to every log record without any code changes to your logging calls.
+
+## Logger examples
+
+<CodeGroup>
+
+```javascript pino
+require('dd-trace').init({ logInjection: true })
+
+const pino = require('pino')
+const logger = pino()
+
+// dd-trace automatically injects dd.trace_id, dd.span_id, etc.
+logger.info('user logged in')
+// Output: { "level": 30, "dd": { "trace_id": "...", "span_id": "...", ... }, "msg": "user logged in" }
+```
+
+```javascript bunyan
+require('dd-trace').init({ logInjection: true })
+
+const bunyan = require('bunyan')
+const logger = bunyan.createLogger({ name: 'my-app' })
+
+// dd-trace automatically injects dd.trace_id, dd.span_id, etc.
+logger.info('user logged in')
+// Output: { "name": "my-app", "dd": { "trace_id": "...", "span_id": "..." }, "msg": "user logged in" }
+```
+
+```javascript winston
+require('dd-trace').init({ logInjection: true })
+
+const winston = require('winston')
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [new winston.transports.Console()]
+})
+
+// dd-trace automatically injects trace context
+logger.info('user logged in')
+// Output: { "level": "info", "dd": { "trace_id": "...", "span_id": "..." }, "message": "user logged in" }
+```
+
+</CodeGroup>
+
+## Manual log injection
+
+If your logging library is not automatically supported, or you need finer control, inject trace context manually using `tracer.scope().active()`.
+
+```javascript
+const tracer = require('dd-trace').init()
+
+function getLogContext() {
+  const span = tracer.scope().active()
+  if (!span) return {}
+
+  const context = span.context()
+  return {
+    dd: {
+      trace_id: context.toTraceId(),
+      span_id: context.toSpanId(),
+      service: tracer._service,
+      env: tracer._env,
+      version: tracer._version
+    }
+  }
+}
+
+// Use with any logger
+console.log(JSON.stringify({
+  msg: 'user logged in',
+  ...getLogContext()
+}))
+```
+
+### Getting individual fields
+
+Access specific trace identifiers from the active span context:
+
+```javascript
+const tracer = require('dd-trace').init()
+
+function handle(req, res) {
+  const span = tracer.scope().active()
+
+  if (span) {
+    const context = span.context()
+    const traceId = context.toTraceId()  // trace ID as string
+    const spanId = context.toSpanId()    // span ID as string
+
+    // Add to a custom logger or structured log payload
+    myLogger.info({
+      message: 'Handling request',
+      'dd.trace_id': traceId,
+      'dd.span_id': spanId
+    })
+  }
+}
+```
+
+## JSON log format requirements
+
+For Datadog to correlate logs with traces, log records must be sent as JSON and include the trace fields in one of these formats:
+
+**Nested under `dd` key (preferred):**
+
+```json
+{
+  "msg": "user logged in",
+  "dd": {
+    "trace_id": "7901582778751081715",
+    "span_id": "4809171762464685135",
+    "service": "my-service",
+    "env": "production",
+    "version": "1.2.3"
+  }
+}
+```
+
+**At the top level:**
+
+```json
+{
+  "msg": "user logged in",
+  "dd.trace_id": "7901582778751081715",
+  "dd.span_id": "4809171762464685135",
+  "dd.service": "my-service",
+  "dd.env": "production",
+  "dd.version": "1.2.3"
+}
+```
+
+<Note>
+  Ensure logs are shipped to Datadog using the Datadog Agent or a supported log forwarder. The log pipeline processes the `dd.trace_id` field to create the correlation link in the Datadog UI.
+</Note>
+
+## Confirming log correlation is working
+
+To verify that trace IDs are appearing in logs, run your application with a request and check the log output for `dd.trace_id` or the `dd` object. In the Datadog UI, open a log entry and look for the **"View Trace"** button, which appears when correlation is working.

@@ -1,0 +1,190 @@
+---
+title: "Web framework integrations"
+description: "Automatic tracing for Express, Fastify, Koa, Hapi, Next.js, Hono, Restify, Connect, and Moleculer."
+---
+
+dd-trace automatically instruments HTTP server frameworks. Each incoming request produces a root span with HTTP method, URL, status code, and route information. Middleware functions each receive their own child span when `middleware` instrumentation is enabled.
+
+## Supported frameworks
+
+<CardGroup cols={3}>
+  <Card title="Express" icon="node-js">`express`</Card>
+  <Card title="Fastify" icon="bolt">`fastify`</Card>
+  <Card title="Koa" icon="layer-group">`koa`</Card>
+  <Card title="Hapi" icon="shield">`@hapi/hapi`</Card>
+  <Card title="Next.js" icon="arrow-right">`next`</Card>
+  <Card title="Hono" icon="fire">`hono`</Card>
+  <Card title="Restify" icon="server">`restify`</Card>
+  <Card title="Connect" icon="plug">`connect`</Card>
+  <Card title="Moleculer" icon="circle-nodes">`moleculer`</Card>
+</CardGroup>
+
+## Configuration
+
+All web framework plugins extend the `HttpServer` interface and share these configuration options:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Enable the plugin. |
+| `service` | `string` | — | Override the service name. |
+| `blocklist` | `string \| RegExp \| Function \| Array` | `[]` | Paths that should **not** be instrumented. |
+| `allowlist` | `string \| RegExp \| Function \| Array` | `/.*/` | Paths that **should** be instrumented. |
+| `headers` | `string[]` | `[]` | Request/response headers to capture as span tags. |
+| `validateStatus` | `(code: number) => boolean` | `code => code < 500` | Determines if a status code should be treated as an error. |
+| `middleware` | `boolean` | `true` | Create spans for individual middleware functions. |
+| `hooks.request` | `(span, req, res) => void` | — | Hook called just before the request span finishes. |
+| `queryStringObfuscation` | `boolean \| string \| RegExp` | — | Obfuscate query string values in `http.url`. |
+
+## Per-framework examples
+
+<Tabs>
+  <Tab title="Express">
+    ```javascript
+    const tracer = require('dd-trace').init()
+
+    tracer.use('express', {
+      // Only instrument /api/* paths
+      allowlist: /^\/api/,
+      // Capture Authorization header
+      headers: ['authorization'],
+      hooks: {
+        request: (span, req, res) => {
+          span.setTag('customer.id', req.query.customerId)
+        }
+      }
+    })
+
+    const express = require('express')
+    const app = express()
+    app.get('/api/users', (req, res) => res.json([]))
+    app.listen(3000)
+    ```
+  </Tab>
+  <Tab title="Fastify">
+    ```javascript
+    const tracer = require('dd-trace').init()
+
+    tracer.use('fastify', {
+      hooks: {
+        request: (span, req, res) => {
+          span.setTag('tenant.id', req.headers['x-tenant-id'])
+        }
+      }
+    })
+
+    const fastify = require('fastify')()
+    fastify.get('/health', async () => ({ ok: true }))
+    fastify.listen({ port: 3000 })
+    ```
+  </Tab>
+  <Tab title="Koa">
+    ```javascript
+    const tracer = require('dd-trace').init()
+
+    tracer.use('koa', {
+      blocklist: ['/healthcheck'],
+      hooks: {
+        request: (span, req, res) => {
+          span.setTag('user.id', req.headers['x-user-id'])
+        }
+      }
+    })
+
+    const Koa = require('koa')
+    const app = new Koa()
+    app.use(async ctx => { ctx.body = 'ok' })
+    app.listen(3000)
+    ```
+  </Tab>
+  <Tab title="Hapi">
+    ```javascript
+    const tracer = require('dd-trace').init()
+
+    tracer.use('hapi', {
+      validateStatus: code => code < 500
+    })
+
+    const Hapi = require('@hapi/hapi')
+    const server = Hapi.server({ port: 3000 })
+    server.route({ method: 'GET', path: '/', handler: () => 'ok' })
+    server.start()
+    ```
+  </Tab>
+  <Tab title="Next.js">
+    ```javascript
+    // In your custom server (server.js)
+    const tracer = require('dd-trace').init()
+
+    tracer.use('next', {
+      hooks: {
+        request: (span, req, res) => {
+          span.setTag('next.page', req.url)
+        }
+      }
+    })
+    ```
+  </Tab>
+  <Tab title="Hono">
+    ```javascript
+    const tracer = require('dd-trace').init()
+
+    tracer.use('hono', {
+      blocklist: ['/ping']
+    })
+
+    const { Hono } = require('hono')
+    const app = new Hono()
+    app.get('/', c => c.text('ok'))
+    ```
+  </Tab>
+</Tabs>
+
+## Span hooks
+
+Span hooks let you add custom tags to spans created by the framework plugin without writing middleware. The hook runs just before the request span finishes, so all request and response information is available.
+
+```javascript
+const tracer = require('dd-trace').init()
+
+tracer.use('express', {
+  hooks: {
+    request: (span, req, res) => {
+      span.setTag('customer.id', req.query.id)
+      span.setTag('user.role', req.user?.role)
+    }
+  }
+})
+```
+
+## Blocking paths (AppSec)
+
+Use `blocklist` to prevent instrumentation of health check or metrics endpoints. This reduces noise in your traces:
+
+```javascript
+tracer.use('express', {
+  blocklist: [
+    '/healthcheck',
+    '/readyz',
+    /^\/metrics/
+  ]
+})
+```
+
+Note that `blocklist` and `allowlist` affect tracing only, not AppSec protection.
+
+## Moleculer
+
+The `moleculer` plugin instruments both the Moleculer service bus client and server. Configure each side independently:
+
+```javascript
+tracer.use('moleculer', {
+  // Include context meta as tags on all spans
+  meta: true,
+  client: {
+    service: 'moleculer-client'
+  },
+  server: {
+    service: 'moleculer-server'
+  }
+})
+```

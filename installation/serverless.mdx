@@ -1,0 +1,131 @@
+---
+title: "Serverless and Lambda"
+description: "Using dd-trace in serverless environments including AWS Lambda, Google Cloud Functions, and Azure Functions."
+---
+
+## AWS Lambda
+
+For AWS Lambda, Datadog provides a dedicated library, `datadog-lambda-js`, which wraps dd-trace and adds Lambda-specific functionality:
+
+- Cold start detection and tagging
+- Automatic flushing of traces before the Lambda function returns
+- Lambda layer support for zero-code-change installation
+- Enhanced metrics via the Datadog Lambda Extension
+
+### Install via Datadog Lambda layer (recommended)
+
+The easiest approach is to add the Datadog Lambda layer to your function. The layer includes both the Datadog Agent (as a Lambda Extension) and `dd-trace` pre-configured for Lambda.
+
+For manual layer installation, see the [Datadog Lambda documentation](https://docs.datadoghq.com/serverless/installation/nodejs/).
+
+### Install via npm
+
+```bash npm
+npm install datadog-lambda-js dd-trace
+```
+
+```bash yarn
+yarn add datadog-lambda-js dd-trace
+```
+
+### Usage
+
+Wrap your Lambda handler with `datadog-lambda-js`:
+
+```javascript handler.js
+'use strict'
+
+const { datadog } = require('datadog-lambda-js')
+const tracer = require('dd-trace').init()
+
+// Wrap your handler with datadog() to enable:
+// - automatic trace/log correlation
+// - enhanced metrics
+// - automatic trace flushing before the function returns
+const myHandler = async (event, context) => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Hello from Lambda!' }),
+  }
+}
+
+module.exports.handler = datadog(myHandler)
+```
+
+### Key Lambda considerations
+
+<Warning>
+Without the Datadog Lambda Extension or a Datadog Agent in the same environment, traces cannot be forwarded to Datadog. The `datadog-lambda-js` wrapper handles flushing traces synchronously before your Lambda function's execution context is frozen.
+</Warning>
+
+**Flush interval:** In Lambda, `dd-trace` automatically sets `flushInterval` to `0` when `AWS_LAMBDA_FUNCTION_NAME` is set, ensuring traces are flushed synchronously at the end of each invocation rather than on a timer.
+
+**Cold starts:** The tracer adds some initialization overhead. Lambda layers and the Datadog Extension minimize cold start impact.
+
+**Agent connectivity:** The Datadog Lambda Extension runs in the same execution environment as your function and listens on `localhost:8126`, so no network configuration is needed when using the extension.
+
+### Environment variables for Lambda
+
+```bash
+DD_SERVICE=my-lambda-function
+DD_ENV=production
+DD_VERSION=1.0.0
+DD_API_KEY=<your-datadog-api-key>
+DD_SITE=datadoghq.com
+```
+
+When using the Datadog Extension, set `DD_API_KEY` (or use AWS Secrets Manager) and `DD_SITE` to route data to the correct Datadog region.
+
+## Google Cloud Functions
+
+dd-trace automatically detects Google Cloud Functions via the `FUNCTION_NAME` (deprecated runtimes) or `K_SERVICE` (newer runtimes) environment variables. When detected:
+
+- `profiling.enabled` defaults to `false`
+- `telemetry.enabled` defaults to `false`
+- `remoteConfig.enabled` defaults to `false`
+- The service name defaults to the function name
+
+Install and initialize the same way as a regular Node.js application:
+
+```javascript index.js
+require('dd-trace').init()
+
+exports.helloWorld = (req, res) => {
+  res.send('Hello, World!')
+}
+```
+
+## Azure Functions
+
+dd-trace automatically detects Azure Functions via the `WEBSITE_SITE_NAME` environment variable. When detected, serverless defaults are applied (same as Lambda/GCF).
+
+dd-trace includes a built-in `azure-functions` plugin:
+
+```javascript index.js
+require('dd-trace').init()
+
+module.exports = async function (context, req) {
+  context.res = {
+    body: 'Hello from Azure Functions!',
+  }
+}
+```
+
+The `azure-functions` plugin is listed in the available integrations and is enabled by default.
+
+## Serverless defaults
+
+When dd-trace detects a serverless environment (Lambda, GCF, or Azure Functions), it applies these defaults automatically:
+
+| Option | Default in serverless | Notes |
+| --- | --- | --- |
+| `crashtracking.enabled` | `false` | Crash tracking requires a long-lived process |
+| `profiling.enabled` | `false` | Profiling overhead is not suitable for short-lived functions |
+| `telemetry.enabled` | `false` | Reduces noise from short-lived invocations |
+| `remoteConfig.enabled` | `false` | Remote config requires a persistent connection |
+| `flushInterval` | `0` (Lambda only) | Flush synchronously before execution context freezes |
+| Service name | Function/service name | Inferred from `AWS_LAMBDA_FUNCTION_NAME`, `K_SERVICE`, or `WEBSITE_SITE_NAME` |
+
+## Issues specific to Lambda
+
+For issues specific to Lambda integration (layer configuration, extension problems, metric forwarding), open an issue in the [datadog-lambda-js repository](https://github.com/DataDog/datadog-lambda-js). For core instrumentation issues not related to the Lambda runtime, open an issue in the [dd-trace-js repository](https://github.com/DataDog/dd-trace-js).

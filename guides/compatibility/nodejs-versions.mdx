@@ -1,0 +1,73 @@
+---
+title: "Node.js Version Compatibility"
+description: "Which Node.js versions are supported by each dd-trace release line."
+---
+
+Each dd-trace major release supports a range of Node.js versions. When a Node.js version reaches end-of-life (EOL), support is dropped in the next dd-trace major release. The previous release line continues to receive updates for up to one year after the new major is published.
+
+## Supported versions
+
+| dd-trace version | Node.js requirement | Status      |
+| ---------------- | ------------------- | ----------- |
+| v5 (current)     | >= 18               | **Current** |
+| v4               | >= 16               | EOL         |
+| v3               | >= 14               | EOL         |
+| v2               | >= 12               | EOL         |
+| v1               | >= 12               | EOL         |
+
+<Warning>
+  Only **v5** is actively maintained. All other release lines are end-of-life and will not receive bug fixes or security updates.
+</Warning>
+
+## Current release: v5
+
+dd-trace v5 requires **Node.js 18 or later**. This aligns with the Node.js LTS lifecycle — Node.js 16 reached EOL in September 2023.
+
+Install the current release:
+
+```bash
+npm install dd-trace
+```
+
+## Checking your Node.js version
+
+Run the following command to check your current Node.js version:
+
+```bash
+node --version
+```
+
+To check which version of dd-trace is installed:
+
+```bash
+npm show dd-trace version
+```
+
+Or check your installed local version:
+
+```bash
+npm list dd-trace
+```
+
+## Node.js LTS lifecycle
+
+Datadog aligns dd-trace release lines with the [Node.js Long Term Support (LTS) schedule](https://nodejs.org/en/about/previous-releases). When a Node.js version exits active LTS and reaches EOL, the next dd-trace major release drops support for it.
+
+The previous dd-trace release line remains in maintenance mode for one year after a new major is released, allowing time to upgrade both Node.js and dd-trace.
+
+<Note>
+  We strongly recommend keeping Node.js up to date regardless of dd-trace's support policy. Running an EOL Node.js version means you are not receiving security patches from the Node.js project.
+</Note>
+
+## Using an EOL dd-trace release
+
+If your application must run on an EOL Node.js version, you can install an older dd-trace release:
+
+```bash
+npm install dd-trace@4  # Supports Node.js >= 16
+npm install dd-trace@3  # Supports Node.js >= 14
+```
+
+<Warning>
+  EOL dd-trace release lines are no longer maintained and will not receive bug fixes or security updates. Upgrade to a supported Node.js version as soon as possible.
+</Warning>

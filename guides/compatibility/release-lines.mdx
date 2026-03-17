@@ -1,0 +1,95 @@
+---
+title: "Release Lines & Support Policy"
+description: "dd-trace release lines, their Node.js requirements, support status, and end-of-life policy."
+---
+
+dd-trace follows a major-version release model. Each release line targets a specific range of Node.js versions and follows a defined support lifecycle.
+
+## Release line table
+
+| Release line | Node.js  | SSI | K8s Injection | Status      | Initial release | End of life |
+| :----------: | :------: | :-: | :-----------: | :---------: | :-------------: | :---------: |
+| [v1](https://github.com/DataDog/dd-trace-js/tree/v1.x) | >= 12 | No  | No  | **EOL**     | 2021-07-13 | 2022-02-25 |
+| [v2](https://github.com/DataDog/dd-trace-js/tree/v2.x) | >= 12 | No  | No  | **EOL**     | 2022-01-28 | 2023-08-15 |
+| [v3](https://github.com/DataDog/dd-trace-js/tree/v3.x) | >= 14 | No  | Yes | **EOL**     | 2022-08-15 | 2024-05-15 |
+| [v4](https://github.com/DataDog/dd-trace-js/tree/v4.x) | >= 16 | Yes | Yes | **EOL**     | 2023-05-12 | 2025-01-11 |
+| [v5](https://github.com/DataDog/dd-trace-js/tree/v5.x) | >= 18 | Yes | Yes | **Current** | 2024-01-11 | Unknown    |
+
+- **SSI**: [Single-Step Install](https://docs.datadoghq.com/tracing/trace_collection/automatic_instrumentation/single-step-apm/?tab=linuxhostorvm) support
+- **K8s Injection**: [Kubernetes library injection](https://docs.datadoghq.com/tracing/trace_collection/library_injection_local/?tab=kubernetes) support
+- **EOL**: End of life — no further updates
+
+## Current maintained release
+
+Datadog currently maintains **v5** only. For new projects, install the latest version:
+
+```bash
+npm install dd-trace
+```
+
+Or with yarn:
+
+```bash
+yarn add dd-trace
+```
+
+To install a specific major version for older Node.js runtimes:
+
+```bash
+npm install dd-trace@4  # Last version supporting Node.js 16
+npm install dd-trace@3  # Last version supporting Node.js 14
+```
+
+## How to check the current version
+
+Check the latest published version on npm:
+
+```bash
+npm show dd-trace version
+```
+
+Check the version installed in your project:
+
+```bash
+npm list dd-trace
+```
+
+## Support lifecycle
+
+### Active (current) release
+
+The current release line receives all bug fixes, security patches, and new features. Only one release line is active at a time: **v5**.
+
+### Maintenance mode
+
+When a new major version is published, the previous release line enters **maintenance mode** for one year. During maintenance mode, a release line receives:
+
+- Critical bug fixes
+- Security patches
+
+It does not receive new features.
+
+### End of life (EOL)
+
+After the one-year maintenance window, a release line reaches **end of life**. EOL release lines receive no further updates of any kind.
+
+```
+v4 released → v3 enters maintenance → (1 year) → v3 reaches EOL
+v5 released → v4 enters maintenance → (1 year) → v4 reaches EOL
+```
+
+<Warning>
+  Running an EOL version of dd-trace means you will not receive security updates. Plan upgrades before the maintenance window closes.
+</Warning>
+
+## Node.js LTS alignment
+
+dd-trace release lines track the [Node.js LTS lifecycle](https://nodejs.org/en/about/previous-releases). When a Node.js version reaches EOL, the next dd-trace major release drops support for it. The previous release line continues to receive updates during its maintenance window, giving teams time to upgrade both runtimes.
+
+## Changelog
+
+Changes for each individual release are documented on the [GitHub Releases page](https://github.com/DataDog/dd-trace-js/releases).
+
+## More information
+
+For detailed compatibility requirements, see the [Node.js Compatibility Requirements](https://docs.datadoghq.com/tracing/trace_collection/compatibility/nodejs/#releases) page in the Datadog documentation.

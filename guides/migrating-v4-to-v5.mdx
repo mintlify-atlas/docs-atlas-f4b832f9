@@ -1,0 +1,126 @@
+---
+title: "Migrating from v4 to v5"
+description: "Step-by-step guide for upgrading dd-trace from v4 to v5, covering all breaking changes."
+---
+
+dd-trace v5 drops support for Node.js 16 and introduces a corrected TypeScript signature for `tracer.trace`. This guide covers all breaking changes and the steps to upgrade.
+
+## Breaking changes
+
+<Warning>
+  **Node.js 16 is no longer supported.** Node.js 16 reached end-of-life in September 2023. dd-trace v5 requires Node.js 18 or later.
+</Warning>
+
+### Node.js version requirement
+
+dd-trace v5 requires **Node.js >= 18**. If your application runs on Node.js 16, you must upgrade Node.js before upgrading dd-trace.
+
+Check your current Node.js version:
+
+```bash
+node --version
+```
+
+### `trace<T>` TypeScript signature change
+
+The TypeScript declaration for `tracer.trace<T>` has been updated to enforce that the callback always receives the span object. Previously the span parameter was technically optional, which was incorrect because the span must always be handled.
+
+**Before (v4):**
+
+```typescript
+// This was incorrectly allowed — span was optional
+tracer.trace('operation.name', () => {
+  // span not received
+})
+```
+
+**After (v5):**
+
+```typescript
+// span is now required in the callback signature
+tracer.trace('operation.name', (span) => {
+  // span must be accepted
+})
+```
+
+If you have TypeScript code that calls `tracer.trace` with a zero-argument callback, you must update those call sites to accept the span:
+
+```typescript
+// Update zero-argument callbacks to accept the span
+tracer.trace('operation.name', (span) => {
+  span.setTag('key', 'value')
+})
+```
+
+## Upgrade steps
+
+<Steps>
+  <Step title="Upgrade Node.js to 18 or later">
+    dd-trace v5 requires Node.js 18 or later. Update your runtime before upgrading the package.
+
+    Verify your version after upgrading:
+
+    ```bash
+    node --version
+    # v18.x.x or later
+    ```
+
+    Also update any `.nvmrc`, `.node-version`, Dockerfile, or CI configuration files that pin your Node.js version.
+  </Step>
+
+  <Step title="Install dd-trace v5">
+    Install the latest version of dd-trace:
+
+    ```bash
+    npm install dd-trace@latest
+    ```
+
+    Or with yarn:
+
+    ```bash
+    yarn add dd-trace@latest
+    ```
+
+    Confirm the installed version:
+
+    ```bash
+    npm show dd-trace version
+    ```
+  </Step>
+
+  <Step title="Update tracer.trace TypeScript call sites">
+    If you use TypeScript, search your codebase for calls to `tracer.trace` where the callback does not accept a span argument and update them:
+
+    ```typescript
+    // Before
+    tracer.trace('my.operation', () => {
+      doWork()
+    })
+
+    // After
+    tracer.trace('my.operation', (span) => {
+      doWork()
+    })
+    ```
+  </Step>
+
+  <Step title="Run your test suite">
+    Run your full test suite to catch any issues introduced by the upgrade:
+
+    ```bash
+    npm test
+    ```
+  </Step>
+</Steps>
+
+## Version compatibility table
+
+| dd-trace version | Node.js requirement | Status  |
+| ---------------- | ------------------- | ------- |
+| v5 (current)     | >= 18               | Current |
+| v4               | >= 16               | EOL     |
+| v3               | >= 14               | EOL     |
+
+<Note>
+  For any issues related to migrating, open an issue on the [dd-trace-js GitHub repository](https://github.com/DataDog/dd-trace-js) or contact [Datadog support](https://www.datadoghq.com/support/).
+</Note>

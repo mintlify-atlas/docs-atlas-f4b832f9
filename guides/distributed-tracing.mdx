@@ -1,0 +1,197 @@
+---
+title: "Distributed Tracing"
+description: "How to propagate trace context across services with dd-trace, including supported formats and custom inject/extract patterns."
+---
+
+Distributed tracing connects spans from multiple services into a single trace. dd-trace automatically propagates trace context for supported HTTP clients, gRPC, and messaging integrations. This guide explains how context propagation works and how to implement it manually for custom transports.
+
+## How context propagation works
+
+When a service makes an outbound request, dd-trace injects the current trace context into the request as HTTP headers. The receiving service extracts those headers and continues the trace, creating a parent-child relationship between spans across service boundaries.
+
+```
+Service A                         Service B
+---------                         ---------
+tracer.inject(span, headers)  --> tracer.extract(headers)
+     |                                 |
+  span A                           span B (child of A)
+```
+
+For supported libraries (e.g., `http`, `fetch`, `undici`, `grpc`, `kafkajs`), injection and extraction happen automatically with no code changes required.
+
+## Propagation formats
+
+dd-trace supports multiple propagation formats. The format determines which HTTP headers carry the trace context.
+
+| Format          | Headers                                                        | Standard          |
+| --------------- | -------------------------------------------------------------- | ----------------- |
+| `datadog`       | `x-datadog-trace-id`, `x-datadog-parent-id`, `x-datadog-sampling-priority`, `x-datadog-tags` | Datadog-specific |
+| `tracecontext`  | `traceparent`, `tracestate`                                    | W3C TraceContext  |
+| `b3multi`       | `x-b3-traceid`, `x-b3-spanid`, `x-b3-sampled`                 | OpenZipkin B3 multi-header |
+| `b3`            | `b3` (single header)                                           | OpenZipkin B3 single-header |
+
+## Configuring propagation style
+
+Configure the propagation format using the `DD_TRACE_PROPAGATION_STYLE` environment variable or the `tracePropagationStyle` init option.
+
+<Tabs>
+  <Tab title="Environment variable">
+    ```bash
+    # Use W3C TraceContext (recommended for interoperability)
+    DD_TRACE_PROPAGATION_STYLE=tracecontext node app.js
+
+    # Use multiple formats (comma-separated)
+    DD_TRACE_PROPAGATION_STYLE=datadog,tracecontext node app.js
+    ```
+  </Tab>
+  <Tab title="Programmatic">
+    ```javascript
+    const tracer = require('dd-trace').init({
+      tracePropagationStyle: ['datadog', 'tracecontext']
+    })
+    ```
+  </Tab>
+  <Tab title="Inject and extract separately">
+    ```bash
+    # Set injection and extraction formats independently
+    DD_TRACE_PROPAGATION_STYLE_INJECT=datadog
+    DD_TRACE_PROPAGATION_STYLE_EXTRACT=datadog,tracecontext,b3multi
+    ```
+  </Tab>
+</Tabs>
+
+When multiple extraction formats are configured, dd-trace tries each format in order and uses the first one that succeeds.
+
+## Manual inject and extract
+
+For custom transports (e.g., message queues, WebSockets, or proprietary protocols), use `tracer.inject()` and `tracer.extract()` to propagate context manually.
+
+### Injecting context into a carrier
+
+Call `tracer.inject()` on the sending side to write trace context into a carrier object (typically an HTTP headers map or a message attribute object):
+
+```javascript
+const tracer = require('dd-trace').init()
+const opentracing = require('opentracing')
+
+// Producer / client side
+function sendMessage(payload) {
+  const span = tracer.scope().active()
+  const carrier = {}
+
+  if (span) {
+    tracer.inject(span.context(), opentracing.FORMAT_HTTP_HEADERS, carrier)
+  }
+
+  // carrier now contains the trace headers, e.g.:
+  // { 'x-datadog-trace-id': '...', 'x-datadog-parent-id': '...' }
+  return queue.send({ payload, headers: carrier })
+}
+```
+
+### Extracting context from a carrier
+
+Call `tracer.extract()` on the receiving side to read context from the carrier and use it as the parent of a new span:
+
+```javascript
+const tracer = require('dd-trace').init()
+const opentracing = require('opentracing')
+
+// Consumer / server side
+function handleMessage(message) {
+  const parentContext = tracer.extract(
+    opentracing.FORMAT_HTTP_HEADERS,
+    message.headers
+  )
+
+  tracer.trace(
+    'message.process',
+    { childOf: parentContext },
+    (span) => {
+      span.setTag('message.id', message.id)
+      processMessage(message)
+    }
+  )
+}
+```
+
+## Cross-service HTTP example
+
+The following example shows two Express services connected by distributed tracing. dd-trace handles inject and extract automatically for the built-in `http` integration.
+
+**Service A — calls Service B:**
+
+```javascript
+// Must be imported before any other modules
+require('dd-trace').init({ service: 'service-a' })
+
+const http = require('http')
+const express = require('express')
+const app = express()
+
+app.get('/orders', (req, res) => {
+  // dd-trace automatically injects trace context into outgoing HTTP headers
+  const options = {
+    hostname: 'service-b',
+    port: 3001,
+    path: '/inventory',
+    method: 'GET'
+  }
+
+  const request = http.request(options, (response) => {
+    res.json({ status: 'ok' })
+  })
+  request.end()
+})
+
+app.listen(3000)
+```
+
+**Service B — receives the request:**
+
+```javascript
+// dd-trace automatically extracts trace context from incoming headers
+require('dd-trace').init({ service: 'service-b' })
+
+const express = require('express')
+const app = express()
+
+app.get('/inventory', (req, res) => {
+  // This span is automatically a child of the span from Service A
+  res.json({ items: [] })
+})
+
+app.listen(3001)
+```
+
+## HTTP headers reference
+
+The following headers are used by each propagation format:
+
+### Datadog format
+
+| Header                           | Description                                 |
+| -------------------------------- | ------------------------------------------- |
+| `x-datadog-trace-id`             | 64-bit trace ID (decimal string)            |
+| `x-datadog-parent-id`            | 64-bit parent span ID (decimal string)      |
+| `x-datadog-sampling-priority`    | Sampling decision: `1` (keep) or `0` (drop) |
+| `x-datadog-tags`                 | Propagated tags (e.g., `_dd.p.dm=-1`)       |
+
+### W3C TraceContext format
+
+| Header         | Description                                               |
+| -------------- | --------------------------------------------------------- |
+| `traceparent`  | Version, trace ID, parent ID, and flags (e.g., `00-<trace-id>-<parent-id>-01`) |
+| `tracestate`   | Vendor-specific state, including Datadog sampling info    |
+
+### B3 multi-header format
+
+| Header           | Description                            |
+| ---------------- | -------------------------------------- |
+| `x-b3-traceid`   | 64 or 128-bit trace ID (hex string)    |
+| `x-b3-spanid`    | 64-bit span ID (hex string)            |
+| `x-b3-sampled`   | `1` (sampled) or `0` (not sampled)     |
+
+<Note>
+  When using W3C TraceContext (`tracecontext`) format, dd-trace uses 128-bit trace IDs. The `datadog` format uses 64-bit trace IDs by default.
+</Note>

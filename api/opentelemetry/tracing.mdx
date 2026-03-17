@@ -1,0 +1,199 @@
+---
+title: "OpenTelemetry Tracing"
+description: "Use the OpenTelemetry Tracing API with dd-trace as a drop-in TracerProvider. Spans created via @opentelemetry/api are sent to Datadog."
+---
+
+dd-trace includes an OpenTelemetry-compatible `TracerProvider` that can be registered with `@opentelemetry/api`. This allows you to write instrumentation using the standard OTel API while sending data to Datadog.
+
+## Setup
+
+```javascript
+const tracer = require('dd-trace').init()
+const { TracerProvider } = tracer
+
+const provider = new TracerProvider()
+provider.register()
+```
+
+After calling `provider.register()`, all calls to `@opentelemetry/api` will use dd-trace as the backend.
+
+```javascript
+const { trace, context } = require('@opentelemetry/api')
+
+const otelTracer = trace.getTracer('my-service', '1.0.0')
+
+const span = otelTracer.startActiveSpan('my-operation', (span) => {
+  try {
+    span.setAttribute('user.id', '123')
+    // do work
+    span.setStatus({ code: 1 }) // SpanStatusCode.OK
+    return result
+  } catch (err) {
+    span.recordException(err)
+    span.setStatus({ code: 2, message: err.message }) // SpanStatusCode.ERROR
+    throw err
+  } finally {
+    span.end()
+  }
+})
+```
+
+## TracerProvider
+
+The `TracerProvider` is a constructor available at `tracer.TracerProvider`.
+
+```typescript
+new TracerProvider(config?: Record<string, unknown>): TracerProvider
+```
+
+### `getTracer(name, version?, options?)`
+
+Returns an OTel-compatible `Tracer` for the given instrumentation scope.
+
+```typescript
+getTracer(name: string, version?: string, options?: any): Tracer
+```
+
+<ParamField path="name" type="string" required>
+  The name of the tracer or instrumentation library.
+</ParamField>
+
+<ParamField path="version" type="string">
+  The version of the tracer or instrumentation library.
+</ParamField>
+
+<ResponseField name="returns" type="Tracer">
+  An OTel-compatible `Tracer` instance backed by dd-trace.
+</ResponseField>
+
+### `register()`
+
+Registers this provider with `@opentelemetry/api`.
+
+```typescript
+register(): void
+```
+
+## OTel Tracer methods
+
+### `startSpan(name, options?, context?)`
+
+Starts a new span without activating it on the context.
+
+```typescript
+startSpan(name: string, options?: SpanOptions, context?: Context): Span
+```
+
+```javascript
+const span = otelTracer.startSpan('db.query')
+span.setAttribute('db.system', 'postgresql')
+span.end()
+```
+
+### `startActiveSpan(name, fn)` / `startActiveSpan(name, options, fn)` / `startActiveSpan(name, options, context, fn)`
+
+Starts a new span and activates it in the context for the duration of the callback.
+
+```typescript
+startActiveSpan<F extends (span: Span) => unknown>(name: string, fn: F): ReturnType<F>
+startActiveSpan<F extends (span: Span) => unknown>(name: string, options: SpanOptions, fn: F): ReturnType<F>
+startActiveSpan<F extends (span: Span) => unknown>(name: string, options: SpanOptions, context: Context, fn: F): ReturnType<F>
+```
+
+```javascript
+const result = otelTracer.startActiveSpan('http.request', span => {
+  try {
+    const data = fetchData()
+    span.setStatus({ code: 1 })
+    return data
+  } catch (err) {
+    span.recordException(err)
+    span.setStatus({ code: 2, message: err.message })
+    throw err
+  } finally {
+    span.end()
+  }
+})
+```
+
+## OTel Span methods
+
+The OTel `Span` interface is backed by dd-trace spans. The following methods are available:
+
+| Method | Description |
+|--------|-------------|
+| `setAttribute(key, value)` | Sets a single attribute |
+| `setAttributes(attributes)` | Sets multiple attributes |
+| `addEvent(name, attributes?, time?)` | Adds a span event |
+| `setStatus(status)` | Sets the span status |
+| `updateName(name)` | Updates the span name |
+| `end(endTime?)` | Ends the span |
+| `isRecording()` | Whether the span is recording |
+| `recordException(exception, time?)` | Records an exception as a span event |
+| `addLink(link)` | Adds a causal link |
+| `addLinks(links)` | Adds multiple causal links |
+| `spanContext()` | Returns the `SpanContext` |
+
+## Attribute mapping to Datadog tags
+
+OpenTelemetry span attributes map to Datadog tags. The following attributes have special meaning:
+
+| OTel attribute | Datadog tag | Description |
+|----------------|-------------|-------------|
+| `service.name` | `service` | Service name for the span |
+| `resource.name` | `resource` | Resource name for the span |
+| `span.type` | `span.type` | Span type (falls back to `custom`) |
+
+All other OTel attributes are stored as-is in Datadog span tags.
+
+## Context propagation
+
+dd-trace supports W3C Trace Context (`traceparent`/`tracestate`) by default. Use the OTel propagation API to inject and extract context:
+
+```javascript
+const { propagation, context, trace } = require('@opentelemetry/api')
+
+// Inject into outgoing headers
+const carrier = {}
+propagation.inject(context.active(), carrier)
+fetch('/downstream', { headers: carrier })
+
+// Extract from incoming headers
+const ctx = propagation.extract(context.active(), req.headers)
+const span = otelTracer.startActiveSpan('request', {}, ctx, span => {
+  // span is a child of the extracted context
+  span.end()
+})
+```
+
+## Full example
+
+```javascript
+const tracer = require('dd-trace').init({ service: 'my-service' })
+
+const provider = new tracer.TracerProvider()
+provider.register()
+
+const { trace } = require('@opentelemetry/api')
+const otelTracer = trace.getTracer('my-service')
+
+async function processRequest(req) {
+  return otelTracer.startActiveSpan('process.request', async (span) => {
+    try {
+      span.setAttribute('request.id', req.id)
+      span.setAttribute('service.name', 'processor')
+
+      const result = await doWork(req)
+
+      span.setStatus({ code: 1 })
+      return result
+    } catch (err) {
+      span.recordException(err)
+      span.setStatus({ code: 2, message: err.message })
+      throw err
+    } finally {
+      span.end()
+    }
+  })
+}
+```

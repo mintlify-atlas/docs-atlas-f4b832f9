@@ -1,0 +1,101 @@
+---
+title: "OpenTracing Compatibility"
+description: "dd-trace is fully OpenTracing-compliant. Use the OpenTracing API with the Datadog tracer as the global tracer."
+---
+
+dd-trace is OpenTracing compliant. You can use the [OpenTracing JavaScript API](https://opentracing.io/guides/javascript/) with dd-trace as the backing implementation.
+
+## Setup
+
+```javascript
+const tracer = require('dd-trace').init()
+const opentracing = require('opentracing')
+
+opentracing.initGlobalTracer(tracer)
+```
+
+After calling `initGlobalTracer`, all OpenTracing API calls use dd-trace as the backend:
+
+```javascript
+const opentracing = require('opentracing')
+const globalTracer = opentracing.globalTracer()
+
+const span = globalTracer.startSpan('web.request')
+span.setTag('http.method', 'GET')
+span.finish()
+```
+
+## Datadog-specific tags
+
+The following OpenTracing tags have special meaning in Datadog and override default behavior:
+
+| Tag | Description |
+|-----|-------------|
+| `service.name` | The service name for the span. Falls back to the tracer's service name if not set. |
+| `resource.name` | The resource name for the span. Falls back to the operation name if not set. |
+| `span.type` | The span type (e.g., `web`, `db`, `cache`, `rpc`). Falls back to `custom` if not set. |
+
+```javascript
+const span = opentracing.globalTracer().startSpan('web.request')
+span.setTag('service.name', 'my-api')
+span.setTag('resource.name', '/users/:id')
+span.setTag('span.type', 'web')
+```
+
+## Context propagation
+
+Use the OpenTracing `inject` and `extract` methods to propagate spans across service boundaries:
+
+```javascript
+const tracer = opentracing.globalTracer()
+
+// Producer: inject span context into headers
+const span = tracer.startSpan('http.request')
+const carrier = {}
+tracer.inject(span.context(), opentracing.FORMAT_HTTP_HEADERS, carrier)
+await fetch('https://service-b/api', { headers: carrier })
+span.finish()
+
+// Consumer: extract span context from incoming headers
+app.use((req, res, next) => {
+  const parentCtx = tracer.extract(opentracing.FORMAT_HTTP_HEADERS, req.headers)
+  const span = tracer.startSpan('http.server', {
+    childOf: parentCtx,
+  })
+  // ...
+  span.finish()
+})
+```
+
+### Supported formats
+
+| Format constant | String value | Description |
+|----------------|--------------|-------------|
+| `FORMAT_HTTP_HEADERS` | `'http_headers'` | HTTP header map |
+| `FORMAT_TEXT_MAP` | `'text_map'` | Plain text key-value map |
+| `FORMAT_BINARY` | `'binary'` | Binary buffer |
+
+## Migration from OpenTracing
+
+If you are migrating existing OpenTracing instrumentation to use dd-trace directly:
+
+1. Replace `opentracing.globalTracer()` calls with the dd-trace `tracer` singleton.
+2. Replace `tracer.startSpan()` / `span.finish()` with `tracer.trace()` or `tracer.wrap()` where possible — these manage span lifecycle automatically.
+3. Use `span.setTag()` or `span.addTags()` instead of the OpenTracing tag methods.
+
+```javascript
+// Before (OpenTracing)
+const span = opentracing.globalTracer().startSpan('operation')
+span.setTag('key', 'value')
+span.finish()
+
+// After (dd-trace native API)
+tracer.trace('operation', span => {
+  span.setTag('key', 'value')
+  // span finishes automatically
+})
+```
+
+<Note>
+  dd-trace extends the OpenTracing `Tracer` interface. All OpenTracing API methods work correctly. However, using the dd-trace native API (`tracer.trace()`, `tracer.wrap()`, `tracer.scope()`) is recommended for new code, as it provides automatic scope and lifecycle management.
+</Note>

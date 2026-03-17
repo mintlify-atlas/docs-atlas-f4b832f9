@@ -1,0 +1,183 @@
+---
+title: "Environment variables"
+description: "All DD_* environment variables for dd-trace, grouped by category, with their programmatic option equivalents."
+---
+
+All configuration can be provided through environment variables. Programmatic options passed to `init()` always take precedence.
+
+## Core identity
+
+| Variable | Programmatic option | Description |
+| --- | --- | --- |
+| `DD_SERVICE` | `service` | Service name. Inferred from `package.json` if not set. |
+| `DD_ENV` | `env` | Environment name (e.g., `prod`, `staging`). |
+| `DD_VERSION` | `version` | Application version. Inferred from `package.json` if not set. |
+| `DD_TAGS` | `tags` | Global tags as comma-separated `key:value` pairs. |
+
+## Agent connectivity
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_AGENT_HOST` | `hostname` | `127.0.0.1` | Hostname of the Datadog Agent. |
+| `DD_TRACE_AGENT_PORT` | `port` | `8126` | Port of the Datadog Agent. |
+| `DD_TRACE_AGENT_URL` | `url` | — | Full URL of the Agent. Overrides host/port. |
+| `DD_TRACE_AGENT_PROTOCOL_VERSION` | `protocolVersion` | `0.4` | Trace API protocol version. |
+
+## Tracing behavior
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_TRACE_ENABLED` | — | `true` | Master switch. Set to `false` to disable all tracing. |
+| `DD_APM_TRACING_ENABLED` | `apmTracingEnabled` | `true` | Enable APM tracing (distinct from standalone AppSec). |
+| `DD_TRACE_FLUSH_INTERVAL` | `flushInterval` | `2000` | Interval (ms) between trace flushes to the Agent. |
+| `DD_TRACE_PARTIAL_FLUSH_MIN_SPANS` | `flushMinSpans` | `1000` | Number of spans to trigger a partial trace flush. |
+| `DD_TRACE_REPORT_HOSTNAME` | `reportHostname` | `false` | Add the hostname tag to all spans. |
+| `DD_TRACE_STARTUP_LOGS` | `startupLogs` | `false` | Print tracer configuration at startup. |
+| `DD_TRACE_LOG_LEVEL` | `logLevel` | `debug` | Log level when debug logging is enabled. |
+| `DD_TRACE_HEADER_TAGS` | `headerTags` | — | Comma-separated HTTP headers to capture as span tags. |
+| `DD_SERVICE_MAPPING` | `serviceMapping` | — | Override service names per plugin, e.g. `pg:my-pg,redis:my-redis`. |
+| `DD_TRACE_SPAN_ATTRIBUTE_SCHEMA` | — | `v0` | Span attribute naming schema version (`v0` or `v1`). |
+| `DD_TRACE_PROPAGATION_STYLE` | `tracePropagationStyle` | `datadog,tracecontext` | Context propagation styles (comma-separated). |
+| `DD_TRACE_PROPAGATION_STYLE_INJECT` | `tracePropagationStyle.inject` | — | Propagation styles for injection only. |
+| `DD_TRACE_PROPAGATION_STYLE_EXTRACT` | `tracePropagationStyle.extract` | — | Propagation styles for extraction only. |
+| `DD_TRACE_OBFUSCATION_QUERY_STRING_REGEXP` | — | — | Regex to obfuscate query string values in `http.url` tags. |
+
+## Sampling
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_TRACE_SAMPLE_RATE` | `sampleRate` | — | Global sample rate (0–1). Defers to Agent if not set. |
+| `DD_TRACE_RATE_LIMIT` | `rateLimit` | — | Maximum traces per second after sampling rules. |
+| `DD_TRACE_SAMPLING_RULES` | `samplingRules` | `[]` | JSON array of sampling rules with `service`, `name`, `sampleRate`. |
+| `DD_SPAN_SAMPLING_RULES` | `spanSamplingRules` | `[]` | JSON array of span sampling rules for dropped traces. |
+| `DD_SPAN_SAMPLING_RULES_FILE` | `spanSamplingRules` | — | Path to a JSON file containing span sampling rules. |
+
+## Log injection
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_LOGS_INJECTION` | `logInjection` | `false` | Inject trace IDs into log records. |
+
+## Runtime metrics
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_RUNTIME_METRICS_ENABLED` | `runtimeMetrics` | `false` | Enable runtime metrics collection. |
+| `DD_RUNTIME_METRICS_GC_ENABLED` | `runtimeMetrics.gc` | — | Enable garbage collection metrics. |
+| `DD_RUNTIME_METRICS_EVENT_LOOP_ENABLED` | `runtimeMetrics.eventLoop` | — | Enable event loop lag metrics. |
+| `DD_RUNTIME_METRICS_RUNTIME_ID_ENABLED` | `runtimeMetricsRuntimeId` | `false` | Add `runtime-id` tag to runtime metrics. |
+| `DD_DOGSTATSD_HOST` | `dogstatsd.hostname` | `127.0.0.1` | DogStatsD Agent hostname for runtime metrics. |
+| `DD_DOGSTATSD_PORT` | `dogstatsd.port` | `8125` | DogStatsD Agent port. |
+
+## Profiling
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_PROFILING_ENABLED` | `profiling` | `false` | Enable continuous profiling. |
+| `DD_PROFILING_EXPORTERS` | — | `agent` | Profiling data exporter. |
+| `DD_PROFILING_SOURCE_MAP` | — | `true` | Use source maps in profiling output. |
+
+## AppSec
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_APPSEC_ENABLED` | `appsec.enabled` | `false` | Enable Application Security Monitoring. |
+| `DD_APPSEC_RULES` | `appsec.rules` | — | Path to a custom WAF rules JSON file. |
+| `DD_APPSEC_TRACE_RATE_LIMIT` | `appsec.rateLimit` | `100` | Max AppSec attack traces per second. |
+| `DD_APPSEC_WAF_TIMEOUT` | `appsec.wafTimeout` | `5000` | Max WAF execution time in microseconds. |
+| `DD_APPSEC_OBFUSCATION_PARAMETER_KEY_REGEXP` | `appsec.obfuscatorKeyRegex` | — | Regex to redact sensitive keys in attack reports. |
+| `DD_APPSEC_OBFUSCATION_PARAMETER_VALUE_REGEXP` | `appsec.obfuscatorValueRegex` | — | Regex to redact sensitive values in attack reports. |
+| `DD_APPSEC_HTTP_BLOCKED_TEMPLATE_HTML` | `appsec.blockedTemplateHtml` | — | Path to custom HTML block page template. |
+| `DD_APPSEC_HTTP_BLOCKED_TEMPLATE_JSON` | `appsec.blockedTemplateJson` | — | Path to custom JSON block response template. |
+| `DD_APPSEC_AUTO_USER_INSTRUMENTATION_MODE` | `appsec.eventTracking.mode` | `identification` | User tracking mode: `identification`, `anonymous`, or `disabled`. |
+| `DD_APPSEC_RASP_ENABLED` | `appsec.rasp.enabled` | `false` | Enable Runtime Application Self-Protection (RASP). |
+| `DD_APPSEC_STACK_TRACE_ENABLED` | `appsec.stackTrace.enabled` | `true` | Enable stack trace reporting in AppSec events. |
+| `DD_APPSEC_MAX_STACK_TRACES` | `appsec.stackTrace.maxStackTraces` | `2` | Maximum number of stack traces per event. |
+| `DD_APPSEC_MAX_STACK_TRACE_DEPTH` | `appsec.stackTrace.maxDepth` | `32` | Maximum stack frame depth per trace. |
+| `DD_API_SECURITY_ENABLED` | `appsec.apiSecurity.enabled` | `true` | Enable API Security schema collection. |
+
+## IAST
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_IAST_ENABLED` | `iast.enabled` | `false` | Enable IAST vulnerability detection. |
+| `DD_IAST_REQUEST_SAMPLING` | — | `30` | Percentage of requests analyzed (0–100). |
+| `DD_IAST_MAX_CONCURRENT_REQUESTS` | — | `2` | Max requests analyzed concurrently. |
+| `DD_IAST_REDACTION_ENABLED` | — | `true` | Enable redaction of sensitive values in vulnerability reports. |
+| `DD_IAST_DEDUPLICATION_ENABLED` | — | `true` | Suppress duplicate vulnerability reports. |
+
+## Remote configuration
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_REMOTE_CONFIGURATION_ENABLED` | — | `true` | Enable Remote Configuration. |
+| `DD_REMOTE_CONFIG_POLL_INTERVAL_SECONDS` | `remoteConfig.pollInterval` | `5` | Seconds between Remote Config polls. |
+
+## Data Streams and DBM
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_DATA_STREAMS_ENABLED` | `dsmEnabled` | `false` | Enable Data Streams Monitoring. |
+| `DD_DBM_PROPAGATION_MODE` | `dbmPropagationMode` | `disabled` | DBM–APM link mode: `disabled`, `service`, or `full`. |
+
+## Client IP
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_TRACE_CLIENT_IP_ENABLED` | `clientIpEnabled` | `false` | Collect client IP from request headers. |
+| `DD_TRACE_CLIENT_IP_HEADER` | `clientIpHeader` | — | Header name to read client IP from. |
+
+## Code origin for spans
+
+| Variable | Programmatic option | Default | Description |
+| --- | --- | --- | --- |
+| `DD_CODE_ORIGIN_FOR_SPANS_ENABLED` | `codeOriginForSpans.enabled` | `true` | Attach source code location to span metadata. |
+
+## Dynamic instrumentation
+
+| Variable | Description |
+| --- | --- |
+| `DD_DYNAMIC_INSTRUMENTATION_ENABLED` | Enable Dynamic Instrumentation (live debugging). |
+| `DD_DYNAMIC_INSTRUMENTATION_PROBE_FILE` | Path to a file containing probe definitions. |
+| `DD_DYNAMIC_INSTRUMENTATION_REDACTED_IDENTIFIERS` | Comma-separated variable names to redact from DI snapshots. |
+
+## LLM Observability
+
+| Variable | Description |
+| --- | --- |
+| `DD_LLMOBS_ENABLED` | Enable LLM Observability. |
+| `DD_LLMOBS_ML_APP` | ML application name for LLMObs grouping. |
+| `DD_LLMOBS_AGENTLESS_ENABLED` | Submit LLMObs data directly to the Datadog backend without an Agent. |
+
+## OpenTelemetry compatibility
+
+The following OTel environment variables are mapped to Datadog equivalents:
+
+| OTel variable | Datadog equivalent | Notes |
+| --- | --- | --- |
+| `OTEL_SERVICE_NAME` | `DD_SERVICE` | |
+| `OTEL_RESOURCE_ATTRIBUTES` | `DD_TAGS` | |
+| `OTEL_TRACES_SAMPLER` | `DD_TRACE_SAMPLE_RATE` | `parentbased_traceidratio` → sample rate |
+| `OTEL_TRACES_SAMPLER_ARG` | `DD_TRACE_SAMPLE_RATE` | Used together with `OTEL_TRACES_SAMPLER` |
+| `OTEL_PROPAGATORS` | `DD_TRACE_PROPAGATION_STYLE` | |
+| `OTEL_LOG_LEVEL` | `DD_TRACE_LOG_LEVEL` | |
+| `OTEL_METRICS_EXPORTER` | `DD_RUNTIME_METRICS_ENABLED` | `none` → disabled |
+| `OTEL_SDK_DISABLED` | `DD_TRACE_OTEL_ENABLED` | |
+
+<Note>
+If both an OTel variable and its Datadog equivalent are set, the Datadog variable takes precedence and a telemetry counter is incremented to track the conflict.
+</Note>
+
+## Crash tracking
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DD_CRASHTRACKING_ENABLED` | `true` (non-serverless) | Enable crash tracking. Automatically disabled in serverless environments. |
+
+## Debugging
+
+| Variable | Description |
+| --- | --- |
+| `DD_TRACE_DEBUG` | Set to `true` to enable debug logging to stdout/stderr. |
+| `DD_TRACE_STARTUP_LOGS` | Set to `true` to print tracer configuration at startup. |
+| `DD_TRACE_SPAN_LEAK_DEBUG` | Enable span leak detection (values: `0`, `1`, `2`). |
